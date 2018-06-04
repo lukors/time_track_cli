@@ -1,3 +1,7 @@
 
 /target
 **/*.rs.bk
+*.sublime-project
+*.sublime-workspace
+config.json
+Cargo.lock
