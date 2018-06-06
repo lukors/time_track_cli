@@ -89,6 +89,9 @@ fn main() {
     if let Some(matches) = matches.subcommand_matches("add") {
         add_event(matches, &cfg).unwrap();
     }
+    if let Some(matches) = matches.subcommand_matches("remove") {
+        remove_event(matches, &cfg).unwrap();
+    }
     if let Some(matches) = matches.subcommand_matches("config") {
         config(matches, &cfg).unwrap();
     }
@@ -108,16 +111,44 @@ fn add_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     Ok(())
 }
 
-fn remove_event(matches: &clap::ArgMatches) -> io::Result<()> {
+fn remove_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
+    let path = Path::new(&config.path);
+
     match matches.value_of("time") {
         Some(time) => {
-            println!("some time");
+            let mut event_db = time_track::EventDB::read(path)?;
+            let time = time.parse::<i64>().unwrap();
+            match event_db.remove_event(time) {
+            	Some(event) => {
+            		event_db.write(&path)?;
+            		println!("Removed event: {:?}", event);
+            		return Ok(())
+            	}
+            	None => {
+            		println!("Could not find an event at that time");
+            		return Ok(())
+            	}
+            }
         }
-        _ => {
-            println!("NOT some time");
+        None => {
+            let mut event_db = time_track::EventDB::read(path)?;
+            let last_time: i64 = match event_db.events.iter().next_back() {
+            	Some(event) => {*event.0}
+            	None => {return Ok(())}
+            };
+            match event_db.remove_event(last_time) {
+            	Some(event) => {
+		            event_db.write(&path)?;
+            		println!("Removed event:\ntime: {:?} {:?}", last_time, event);
+		            return Ok(())
+            	}
+            	None => {
+            		println!("There are no events to remove");
+            		return Ok(())
+            	}
+            }
         }
     }
-    Ok(())
 }
 
 fn config(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
