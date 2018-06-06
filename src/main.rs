@@ -71,6 +71,26 @@ fn main() {
                 ),
         )
         .subcommand(
+        	SubCommand::with_name("add_tag")
+        		.about("Adds a tag to the database")
+        		.arg(
+        			Arg::with_name("short")
+        				.short("s")
+        				.long("short")
+        				.help("The short name for the tag that can be quickly written in the terminal")
+        				.takes_value(true)
+        				.required(true),
+				)
+        		.arg(
+        			Arg::with_name("long")
+        				.short("l")
+        				.long("long")
+        				.help("The long name for the tag that for clear printing")
+        				.takes_value(true)
+        				.required(true),
+				),
+		)
+        .subcommand(
             SubCommand::with_name("config")
                 .about("Edit the config file")
                 .arg(
@@ -91,6 +111,9 @@ fn main() {
     }
     if let Some(matches) = matches.subcommand_matches("remove") {
         remove_event(matches, &cfg).unwrap();
+    }
+    if let Some(matches) = matches.subcommand_matches("add_tag") {
+        add_tag(matches, &cfg).unwrap();
     }
     if let Some(matches) = matches.subcommand_matches("config") {
         config(matches, &cfg).unwrap();
@@ -149,6 +172,21 @@ fn remove_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             }
         }
     }
+}
+
+
+fn add_tag(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
+    let path = Path::new(&config.path);
+    let mut event_db = time_track::EventDB::read(path)?;
+
+    // I can unwrap these because these arguments are required in Clap.
+    let long_name = matches.value_of("long").unwrap();
+    let short_name = matches.value_of("short").unwrap();
+
+    event_db.add_tag(long_name, short_name).unwrap();
+    event_db.write(path)?;
+
+    Ok(())
 }
 
 fn config(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
