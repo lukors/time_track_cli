@@ -71,25 +71,37 @@ fn main() {
                 ),
         )
         .subcommand(
-        	SubCommand::with_name("add_tag")
-        		.about("Adds a tag to the database")
-        		.arg(
-        			Arg::with_name("short")
-        				.short("s")
-        				.long("short")
-        				.help("The short name for the tag that can be quickly written in the terminal")
-        				.takes_value(true)
-        				.required(true),
-				)
-        		.arg(
-        			Arg::with_name("long")
-        				.short("l")
-        				.long("long")
-        				.help("The long name for the tag that for clear printing")
-        				.takes_value(true)
-        				.required(true),
-				),
-		)
+            SubCommand::with_name("add_tag")
+                .about("Adds a tag to the database")
+                .arg(
+                    Arg::with_name("short")
+                        .short("s")
+                        .long("short")
+                        .help("The short name for the tag that can be quickly written in the terminal")
+                        .takes_value(true)
+                        .required(true),
+                )
+                .arg(
+                    Arg::with_name("long")
+                        .short("l")
+                        .long("long")
+                        .help("The long name for the tag that for clear printing")
+                        .takes_value(true)
+                        .required(true),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("remove_tag")
+                .about("Removes a tag from the database")
+                .arg(
+                    Arg::with_name("short")
+                        .short("s")
+                        .long("short")
+                        .help("The short name for the tag to remove")
+                        .takes_value(true)
+                        .required(true),
+                ),
+        )
         .subcommand(
             SubCommand::with_name("config")
                 .about("Edit the config file")
@@ -112,8 +124,14 @@ fn main() {
     if let Some(matches) = matches.subcommand_matches("remove") {
         remove_event(matches, &cfg).unwrap();
     }
+    if let Some(matches) = matches.subcommand_matches("edit") {
+        edit_event(matches, &cfg).unwrap();
+    }
     if let Some(matches) = matches.subcommand_matches("add_tag") {
         add_tag(matches, &cfg).unwrap();
+    }
+    if let Some(matches) = matches.subcommand_matches("remove_tag") {
+        remove_tag(matches, &cfg).unwrap();
     }
     if let Some(matches) = matches.subcommand_matches("config") {
         config(matches, &cfg).unwrap();
@@ -174,6 +192,9 @@ fn remove_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     }
 }
 
+fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
+    Ok(())
+}
 
 fn add_tag(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.path);
@@ -185,6 +206,18 @@ fn add_tag(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
     event_db.add_tag(long_name, short_name).unwrap();
     event_db.write(path)?;
+
+    Ok(())
+}
+
+fn remove_tag(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
+    let path = Path::new(&config.path);
+    let mut event_db = time_track::EventDB::read(path)?;
+
+    if let Some(short_name) = matches.value_of("short") {
+        event_db.remove_tag(short_name.to_string());
+        event_db.write(path)?;
+    }
 
     Ok(())
 }
