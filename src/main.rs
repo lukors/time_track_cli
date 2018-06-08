@@ -71,6 +71,47 @@ fn main() {
                 ),
         )
         .subcommand(
+            SubCommand::with_name("log")
+                .about("Lists events")
+        )
+        .subcommand(
+            SubCommand::with_name("edit")
+                .about("Make changes to an event")
+                .arg(
+                    Arg::with_name("position")
+                        .short("p")
+                        .long("position")
+                        .help("The position in the list of the event to edit (use log to find position)")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("time")
+                        .long("time")
+                        .short("t")
+                        .help("The new time for the event")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("message")
+                        .short("m")
+                        .long("message")
+                        .help("What the event's describing message should be changed to")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("add_tags")
+                        .long("add_tags")
+                        .help("Tags that should be added to the event")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("rm_tags")
+                        .long("rm_tags")
+                        .help("Tags that should be removed from the event")
+                        .takes_value(true),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("add_tag")
                 .about("Adds a tag to the database")
                 .arg(
@@ -123,6 +164,9 @@ fn main() {
     }
     if let Some(matches) = matches.subcommand_matches("remove") {
         remove_event(matches, &cfg).unwrap();
+    }
+    if let Some(matches) = matches.subcommand_matches("log") {
+        log(matches, &cfg).unwrap();
     }
     if let Some(matches) = matches.subcommand_matches("edit") {
         edit_event(matches, &cfg).unwrap();
@@ -192,7 +236,31 @@ fn remove_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     }
 }
 
+fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
+    let path = Path::new(&config.path);
+    let event_db = time_track::EventDB::read(path)?;
+    
+    println!("{0: <20} {1: <15} {2: <46}", 
+        "Time", "Tags", "Description");
+    for (time, event) in event_db.events.iter().rev().take(10) {
+        let time_string = Local.timestamp(*time, 0).format("%Y-%m-%d %H:%M:%S").to_string();
+        let num_tags = event.tag_ids.len();
+        // let tags_string = format!("{}: {}", num_tags, event.)
+
+        println!("{0: <20} {1: <15} {2: <46}", 
+        time_string, "Tags", "Description");
+    }
+
+    Ok(())
+}
+
 fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
+    let path = Path::new(&config.path);
+    let mut event_db = time_track::EventDB::read(path)?;
+    
+
+
+    event_db.write(path)?;
     Ok(())
 }
 
