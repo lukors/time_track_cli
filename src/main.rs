@@ -7,7 +7,7 @@ extern crate chrono;
 extern crate clap;
 extern crate time_track;
 
-use chrono::prelude::*;
+use chrono::{Duration, prelude::*,};
 use clap::{App, Arg, SubCommand};
 use std::{fs::File,
           io::{self, prelude::*},
@@ -72,7 +72,14 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("log")
-                .about("Lists events")
+                .about("Lists events on a given day")
+                .arg(
+                    Arg::with_name("day")
+                        .short("d")
+                        .long("day")
+                        .help("Which day to list")
+                        .takes_value(true),
+                ),
         )
         .subcommand(
             SubCommand::with_name("edit")
@@ -204,51 +211,91 @@ fn remove_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             let mut event_db = time_track::EventDB::read(path)?;
             let time = time.parse::<i64>().unwrap();
             match event_db.remove_event(time) {
-            	Some(event) => {
-            		event_db.write(&path)?;
-            		println!("Removed event: {:?}", event);
-            		return Ok(())
-            	}
-            	None => {
-            		println!("Could not find an event at that time");
-            		return Ok(())
-            	}
+                Some(event) => {
+                    event_db.write(&path)?;
+                    println!("Removed event: {:?}", event);
+                    return Ok(());
+                }
+                None => {
+                    println!("Could not find an event at that time");
+                    return Ok(());
+                }
             }
         }
         None => {
             let mut event_db = time_track::EventDB::read(path)?;
             let last_time: i64 = match event_db.events.iter().next_back() {
-            	Some(event) => {*event.0}
-            	None => {return Ok(())}
+                Some(event) => *event.0,
+                None => return Ok(()),
             };
             match event_db.remove_event(last_time) {
-            	Some(event) => {
-		            event_db.write(&path)?;
-            		println!("Removed event:\ntime: {:?} {:?}", last_time, event);
-		            return Ok(())
-            	}
-            	None => {
-            		println!("There are no events to remove");
-            		return Ok(())
-            	}
+                Some(event) => {
+                    event_db.write(&path)?;
+                    println!("Removed event:\ntime: {:?} {:?}", last_time, event);
+                    return Ok(());
+                }
+                None => {
+                    println!("There are no events to remove");
+                    return Ok(());
+                }
             }
         }
     }
 }
 
+/// Prints out all events on a given day.
 fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.path);
     let event_db = time_track::EventDB::read(path)?;
-    
-    println!("{0: <20} {1: <15} {2: <46}", 
-        "Time", "Tags", "Description");
-    for (time, event) in event_db.events.iter().rev().take(10) {
-        let time_string = Local.timestamp(*time, 0).format("%Y-%m-%d %H:%M:%S").to_string();
-        let num_tags = event.tag_ids.len();
-        // let tags_string = format!("{}: {}", num_tags, event.)
 
-        println!("{0: <20} {1: <15} {2: <46}", 
-        time_string, "Tags", "Description");
+    let input_day = matches.value_of("day");
+
+    let target_day: chrono::Date<Local> = match input_day {
+        Some(s) => {
+            match s.parse::<i64>() {
+                Ok(t) => Local::today() - Duration::days(t),
+                Err(_) => {
+                    println!("Unrecognized day given");
+                    return Ok(());
+                },
+            }
+        },
+        None => Local::today(),
+    };
+
+    println!(
+        "{0: <4} {1: <20} {2: <15} {3: <42}",
+        "Pos", "Time", "Tags", "Description"
+    );
+    for (i, (time, event)) in event_db.events.iter().rev().enumerate() {
+        let local_time = Local.timestamp(*time, 0);
+
+        use std::cmp::Ordering;
+        match local_time.date().cmp(&target_day) {
+            Ordering::Less => break,
+            Ordering::Equal => (),
+            Ordering::Greater => continue,
+        }
+
+        let time_string = local_time
+            .format("%Y-%m-%d %H:%M:%S")
+            .to_string();
+
+        let num_tags = event.tag_ids.len();
+        let only_tags = event
+            .tag_ids
+            .iter()
+            .map(|i| &*event_db.tags.get(i).unwrap().short_name)
+            .collect::<Vec<&str>>()
+            .join(" ");
+        let tags_string = format!("{}: {}", num_tags, only_tags);
+
+        let description = &event.description;
+
+        println!(
+            "{0: <4} {1: <20} {2: <15} {3: <42}",
+            i, time_string, tags_string, description
+        );
     }
 
     Ok(())
@@ -257,8 +304,6 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.path);
     let mut event_db = time_track::EventDB::read(path)?;
-    
-
 
     event_db.write(path)?;
     Ok(())
