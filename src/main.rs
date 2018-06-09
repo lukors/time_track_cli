@@ -334,7 +334,6 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     if let Some(message) = matches.value_of("message") {
         match event_db.get_event_mut(event_position) {
             Some(e) => {
-                let old_message = e.description.clone();
                 e.description = message.to_string();
             }
             None => {
@@ -344,7 +343,18 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         };
     }
 
-    let add_tags = matches.value_of("add_tags");
+    if let Some(add_tags) = matches.value_of("add_tags") {
+        let short_names: Vec<&str> = add_tags.split_whitespace().collect();
+
+        match event_db.add_tags_for_event(event_position, &short_names) {
+            Ok(_) => (),
+            Err(e) => {
+                println!("{}", e);
+                return Ok(())
+            }
+        }
+    }
+
     let rm_tags = matches.value_of("rm_tags");
 
     event_db.write(path)?;
