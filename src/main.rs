@@ -46,8 +46,6 @@ fn main() {
                 .about("Adds a new time tracking event")
                 .arg(
                     Arg::with_name("message")
-                        .short("m")
-                        .long("message")
                         .help("A description for the event")
                         .takes_value(true),
                 )
@@ -61,12 +59,10 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("remove")
-                .about("Removes an event based on its time, or more recent event")
+                .about("Removes an event based on its position")
                 .arg(
-                    Arg::with_name("time")
-                        .short("t")
-                        .long("time")
-                        .help("The UNIX time for the event to remove")
+                    Arg::with_name("position")
+                        .help("The position of the event to remove")
                         .takes_value(true),
                 ),
         )
@@ -86,8 +82,6 @@ fn main() {
                 .about("Make changes to an event")
                 .arg(
                     Arg::with_name("position")
-                        .short("p")
-                        .long("position")
                         .help("The position in the list of the event to edit (use log to find position)")
                         .takes_value(true),
                 )
@@ -96,6 +90,13 @@ fn main() {
                         .long("time")
                         .short("t")
                         .help("The new time for the event")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("day")
+                        .long("day")
+                        .short("d")
+                        .help("The new day for the event")
                         .takes_value(true),
                 )
                 .arg(
@@ -204,43 +205,31 @@ fn add_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 }
 
 fn remove_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
+    // TODO: Edit this function to use the position system instead of specific times.
     let path = Path::new(&config.path);
+    let mut event_db = time_track::EventDB::read(path)?;
 
-    match matches.value_of("time") {
-        Some(time) => {
-            let mut event_db = time_track::EventDB::read(path)?;
-            let time = time.parse::<i64>().unwrap();
-            match event_db.remove_event(time) {
-                Some(event) => {
-                    event_db.write(&path)?;
-                    println!("Removed event: {:?}", event);
-                    return Ok(());
-                }
-                None => {
-                    println!("Could not find an event at that time");
-                    return Ok(());
-                }
-            }
-        }
-        None => {
-            let mut event_db = time_track::EventDB::read(path)?;
-            let last_time: i64 = match event_db.events.iter().next_back() {
-                Some(event) => *event.0,
-                None => return Ok(()),
-            };
-            match event_db.remove_event(last_time) {
-                Some(event) => {
-                    event_db.write(&path)?;
-                    println!("Removed event:\ntime: {:?} {:?}", last_time, event);
-                    return Ok(());
-                }
-                None => {
-                    println!("There are no events to remove");
-                    return Ok(());
-                }
-            }
-        }
+    let mut event_position = 0;
+    if let Some(position) = matches.value_of("position") {
+        event_position = match position.parse::<i64>() {
+            Ok(p) => p as usize,
+            _ => {
+                println!("Could not parse position value");
+                return Ok(())
+            },
+        };
     }
+    let event_position = event_position;
+
+    match event_db.remove_event(&event_position) {
+        Some(e) => {
+            event_db.write(&path)?;
+            println!("Removed {:?}", e);
+        }
+        None => println!("Could not find an event at the given position"),
+    };
+
+    Ok(())
 }
 
 /// Prints out all events on a given day.
@@ -278,7 +267,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         }
 
         let time_string = local_time
-            .format("%Y-%m-%d %H:%M:%S")
+            .format("%Y-%m-%d %H:%M")
             .to_string();
 
         let num_tags = event.tag_ids.len();
@@ -293,7 +282,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         let description = &event.description;
 
         println!(
-            "{0: <4} {1: <20} {2: <15} {3: <42}",
+            "{0: <4} {1: <17} {2: <15} {3: <45}",
             i, time_string, tags_string, description
         );
     }
@@ -304,6 +293,46 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.path);
     let mut event_db = time_track::EventDB::read(path)?;
+
+    let mut event_position = 0;
+    if let Some(position) = matches.value_of("position") {
+        event_position = match position.parse::<i64>() {
+            Ok(p) => p as usize,
+            _ => {
+                println!("Could not parse position value");
+                return Ok(())
+            },
+        };
+    }
+    let event_position = event_position;
+
+    if let Some(time_str) = matches.value_of("time") {
+        let mut time: Vec<u32> = 
+            time_str.split(':').rev().map(|s| s.parse::<u32>().unwrap()).collect();
+
+        let time = match time.len() {
+            2 => Local::today().and_hms(time.pop().unwrap(), time.pop().unwrap(), 0),
+            3 => Local::today().and_hms(time.pop().unwrap(), time.pop().unwrap(), time.pop().unwrap()),
+            _ => {
+                println!("Invalid time");
+                return Ok(())
+            },
+        };
+
+        let event = match event_db.remove_event(&event_position) {
+            Some(e) => e,
+            None => {
+                println!("Could not find an event at the given position");
+                return Ok(())
+            }
+        };
+        event_db.events.insert(time.timestamp(), event);
+    }
+
+    let day = matches.value_of("day");
+    let message = matches.value_of("message");
+    let add_tags = matches.value_of("add_tags");
+    let rm_tags = matches.value_of("rm_tags");
 
     event_db.write(path)?;
     Ok(())
