@@ -355,7 +355,17 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         }
     }
 
-    let rm_tags = matches.value_of("rm_tags");
+    if let Some(rm_tags) = matches.value_of("rm_tags") {
+        let short_names: Vec<&str> = rm_tags.split_whitespace().collect();
+
+        match event_db.remove_tags_for_event(event_position, &short_names) {
+            Ok(_) => (),
+            Err(e) => {
+                println!("{}", e);
+                return Ok(())
+            }
+        }
+    }
 
     event_db.write(path)?;
     println!("Sucessfully edited the event");
