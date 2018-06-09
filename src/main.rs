@@ -221,7 +221,7 @@ fn remove_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     }
     let event_position = event_position;
 
-    match event_db.remove_event(&event_position) {
+    match event_db.remove_event(event_position) {
         Some(e) => {
             event_db.write(&path)?;
             println!("Removed {:?}", e);
@@ -319,7 +319,7 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             },
         };
 
-        let event = match event_db.remove_event(&event_position) {
+        let event = match event_db.remove_event(event_position) {
             Some(e) => e,
             None => {
                 println!("Could not find an event at the given position");
@@ -330,11 +330,25 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     }
 
     let day = matches.value_of("day");
-    let message = matches.value_of("message");
+    
+    if let Some(message) = matches.value_of("message") {
+        match event_db.get_event_mut(event_position) {
+            Some(e) => {
+                let old_message = e.description.clone();
+                e.description = message.to_string();
+            }
+            None => {
+                println!("Could not find an event at the given position");
+                return Ok(())
+            }
+        };
+    }
+
     let add_tags = matches.value_of("add_tags");
     let rm_tags = matches.value_of("rm_tags");
 
     event_db.write(path)?;
+    println!("Sucessfully edited the event");
     Ok(())
 }
 
