@@ -208,14 +208,23 @@ fn main() {
 }
 
 fn add_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
-    let time = Utc::now().timestamp();
+    let timestamp = match matches.value_of("time") {
+        Some(t) => match parse_datetime(t) {
+            Ok(dt) => dt.timestamp(),
+            Err(e) => {
+                println!("Error parsing date/time: {:?}", e);
+                return Ok(());
+            }
+        },
+        None => Utc::now().timestamp(),
+    };
     let description = matches.value_of("message").unwrap_or("");
     let tags = matches.value_of("tags").unwrap_or("");
     let tags: Vec<_> = tags.split_whitespace().collect();
 
     let path = Path::new(&config.path);
     let mut event_db = time_track::EventDB::read(path)?;
-    event_db.add_event(time, description, &tags).unwrap();
+    event_db.add_event(timestamp, description, &tags).unwrap();
     event_db.write(path)?;
 
     Ok(())
