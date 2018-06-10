@@ -7,11 +7,12 @@ extern crate chrono;
 extern crate clap;
 extern crate time_track;
 
-use chrono::{Duration, prelude::*,};
+use chrono::{prelude::*, Duration};
 use clap::{App, Arg, SubCommand};
 use std::{fs::File,
           io::{self, prelude::*},
-          path::Path};
+          path::Path,
+          str::FromStr};
 use time_track::{Event, EventDB};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -21,18 +22,22 @@ struct Config {
 const CONFIG_PATH: &str = "config.json";
 
 impl Config {
-    fn read() -> io::Result<Config> {
-        // TODO: Handle case where there is no config file.
+    fn new() -> Config {
+        Config {
+            path: "time_track_db.json".to_string(),
+        }
+    }
 
+    fn read() -> io::Result<Config> {
         let file = File::open(CONFIG_PATH)?;
         let config = serde_json::from_reader(file)?;
         Ok(config)
     }
 
-    fn write(&self) -> io::Result<()> {
+    fn write(&self) -> io::Result<File> {
         let file = File::create(CONFIG_PATH)?;
         serde_json::to_writer_pretty(&file, self)?;
-        Ok(())
+        Ok(file)
     }
 }
 
@@ -55,6 +60,12 @@ fn main() {
                         .long("tags")
                         .help("The tags to associate with the event")
                         .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("time")
+                        .long("time")
+                        .help("The time to put the event at")
+                        .takes_value(true),
                 ),
         )
         .subcommand(
@@ -71,9 +82,14 @@ fn main() {
                 .about("Lists events on a given day")
                 .arg(
                     Arg::with_name("day")
-                        .short("d")
-                        .long("day")
-                        .help("Which day to list")
+                        .help("How many days back the day you want to list is")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("range")
+                        .help("How many days should be listed into the past from \"day\"")
+                        .short("r")
+                        .long("range")
                         .takes_value(true),
                 ),
         )
@@ -215,8 +231,8 @@ fn remove_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             Ok(p) => p as usize,
             _ => {
                 println!("Could not parse position value");
-                return Ok(())
-            },
+                return Ok(());
+            }
         };
     }
     let event_position = event_position;
@@ -240,13 +256,11 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let input_day = matches.value_of("day");
 
     let target_day: chrono::Date<Local> = match input_day {
-        Some(s) => {
-            match s.parse::<i64>() {
-                Ok(t) => Local::today() - Duration::days(t),
-                Err(_) => {
-                    println!("Unrecognized day given");
-                    return Ok(());
-                },
+        Some(s) => match s.parse::<i64>() {
+            Ok(t) => Local::today() - Duration::days(t),
+            Err(_) => {
+                println!("Unrecognized day given");
+                return Ok(());
             }
         },
         None => Local::today(),
@@ -266,9 +280,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             Ordering::Greater => continue,
         }
 
-        let time_string = local_time
-            .format("%Y-%m-%d %H:%M")
-            .to_string();
+        let time_string = local_time.format("%Y-%m-%d %H:%M").to_string();
 
         let num_tags = event.tag_ids.len();
         let only_tags = event
@@ -300,37 +312,32 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             Ok(p) => p as usize,
             _ => {
                 println!("Could not parse position value");
-                return Ok(())
-            },
+                return Ok(());
+            }
         };
     }
     let event_position = event_position;
 
     if let Some(time_str) = matches.value_of("time") {
-        let mut time: Vec<u32> = 
-            time_str.split(':').rev().map(|s| s.parse::<u32>().unwrap()).collect();
-
-        let time = match time.len() {
-            2 => Local::today().and_hms(time.pop().unwrap(), time.pop().unwrap(), 0),
-            3 => Local::today().and_hms(time.pop().unwrap(), time.pop().unwrap(), time.pop().unwrap()),
-            _ => {
-                println!("Invalid time");
-                return Ok(())
-            },
-        };
+        let date_time = Local
+            .datetime_from_str(
+                &format!("{} {}", Local::today().format("%Y-%m-%d"), time_str),
+                "%Y-%m-%d %H:%M",
+            )
+            .unwrap();
 
         let event = match event_db.remove_event(event_position) {
             Some(e) => e,
             None => {
                 println!("Could not find an event at the given position");
-                return Ok(())
+                return Ok(());
             }
         };
-        event_db.events.insert(time.timestamp(), event);
+        event_db.events.insert(date_time.timestamp(), event);
     }
 
     let day = matches.value_of("day");
-    
+
     if let Some(message) = matches.value_of("message") {
         match event_db.get_event_mut(event_position) {
             Some(e) => {
@@ -338,7 +345,7 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             }
             None => {
                 println!("Could not find an event at the given position");
-                return Ok(())
+                return Ok(());
             }
         };
     }
@@ -350,7 +357,7 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             Ok(_) => (),
             Err(e) => {
                 println!("{}", e);
-                return Ok(())
+                return Ok(());
             }
         }
     }
@@ -362,7 +369,7 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             Ok(_) => (),
             Err(e) => {
                 println!("{}", e);
-                return Ok(())
+                return Ok(());
             }
         }
     }
