@@ -21,6 +21,7 @@ struct Config {
     path: String,
 }
 const CONFIG_PATH: &str = "config.json";
+const YMD_FORMAT: &str = "%Y-%m-%d";
 
 impl Config {
     fn new() -> Config {
@@ -83,12 +84,19 @@ fn main() {
                 .about("Lists events on a given day")
                 .arg(
                     Arg::with_name("day")
-                        .help("How many days back the day you want to list is")
+                        .help("How many days back from the \"date\" to list events")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("date")
+                        .help("What date to start from")
+                        .short("d")
+                        .long("date")
                         .takes_value(true),
                 )
                 .arg(
                     Arg::with_name("range")
-                        .help("How many days should be listed into the past from \"day\"")
+                        .help("How many days into the past to list")
                         .short("r")
                         .long("range")
                         .takes_value(true),
@@ -263,18 +271,26 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.path);
     let event_db = time_track::EventDB::read(path)?;
 
-    let input_day = matches.value_of("day");
-
-    let target_day: chrono::Date<Local> = match input_day {
-        Some(s) => match s.parse::<i64>() {
-            Ok(t) => Local::today() - Duration::days(t),
-            Err(_) => {
-                println!("Unrecognized day given");
+    let mut date: chrono::Date<Local> = match matches.value_of("date") {
+        Some(date_str) => match parse_date(date_str) {
+            Ok(dt) => dt,
+            Err(e) => {
+                println!("Error parsing date: {:?}", e);
                 return Ok(());
             }
         },
         None => Local::today(),
     };
+
+    if let Some(day) = matches.value_of("day") {
+        match day.parse::<i64>() {
+            Ok(d) => date = date - Duration::days(d),
+            Err(e) => {
+                println!("Error when parsing \"day\" argument: {:?}", e);
+                return Ok(());
+            }
+        }
+    }
 
     println!(
         "{0: <4} {1: <20} {2: <15} {3: <42}",
@@ -284,7 +300,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         let local_time = Local.timestamp(*time, 0);
 
         use std::cmp::Ordering;
-        match local_time.date().cmp(&target_day) {
+        match local_time.date().cmp(&date) {
             Ordering::Less => break,
             Ordering::Equal => (),
             Ordering::Greater => continue,
@@ -313,14 +329,19 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 }
 
 fn parse_datetime(datetime_str: &str) -> ParseResult<DateTime<Local>> {
-    let ymd_format = "%Y-%m-%d";
-
     let datetime_str = match datetime_str.contains(' ') {
         true => datetime_str.to_string(),
-        false => format!("{} {}", Local::today().format(ymd_format), datetime_str),
+        false => format!("{} {}", Local::today().format(YMD_FORMAT), datetime_str),
     };
 
-    Local.datetime_from_str(&datetime_str, &format!("{} {}", ymd_format, "%H:%M"))
+    Local.datetime_from_str(&datetime_str, &format!("{} {}", YMD_FORMAT, "%H:%M"))
+}
+
+fn parse_date(date_str: &str) -> ParseResult<Date<Local>> {
+    let datetime_str = format!("{} 00:00", date_str);
+    Ok(Local
+        .datetime_from_str(&datetime_str, &format!("{} {}", YMD_FORMAT, "%H:%M"))?
+        .date())
 }
 
 fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
