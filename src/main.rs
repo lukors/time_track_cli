@@ -7,7 +7,8 @@ extern crate chrono;
 extern crate clap;
 extern crate time_track;
 
-use chrono::{prelude::*, Duration};
+use chrono::{ParseResult,
+             {prelude::*, Duration}};
 use clap::{App, Arg, SubCommand};
 use std::{fs::File,
           io::{self, prelude::*},
@@ -302,6 +303,17 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     Ok(())
 }
 
+fn parse_datetime(datetime_str: &str) -> ParseResult<DateTime<Local>> {
+    let ymd_format = "%Y-%m-%d";
+
+    let datetime_str = match datetime_str.contains(' ') {
+        true => datetime_str.to_string(),
+        false => format!("{} {}", Local::today().format(ymd_format), datetime_str),
+    };
+
+    Local.datetime_from_str(&datetime_str, &format!("{} {}", ymd_format, "%H:%M"))
+}
+
 fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.path);
     let mut event_db = time_track::EventDB::read(path)?;
@@ -318,13 +330,14 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     }
     let event_position = event_position;
 
-    if let Some(time_str) = matches.value_of("time") {
-        let date_time = Local
-            .datetime_from_str(
-                &format!("{} {}", Local::today().format("%Y-%m-%d"), time_str),
-                "%Y-%m-%d %H:%M",
-            )
-            .unwrap();
+    if let Some(date_time_str) = matches.value_of("time") {
+        let date_time = match parse_datetime(date_time_str) {
+            Ok(dt) => dt,
+            Err(e) => {
+                println!("Error parsing date/time: {:?}", e);
+                return Ok(());
+            }
+        };
 
         let event = match event_db.remove_event(event_position) {
             Some(e) => e,
