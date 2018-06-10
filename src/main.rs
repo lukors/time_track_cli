@@ -292,37 +292,51 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         }
     }
 
+    let range = match matches.value_of("range") {
+        Some(r) => match r.parse::<i64>() {
+            Ok(i) => i,
+            Err(e) => {
+                println!("Could not parse \"range\": {:?}", e);
+                return Ok(())
+            },
+        },
+        None => 0,
+    };
+
     println!(
-        "{0: <4} {1: <20} {2: <15} {3: <42}",
-        "Pos", "Time", "Tags", "Description"
+        "{:<14.14} {:>6.6} {:<15.15} {:<42.42}",
+        "Time", "Pos", "Tags", "Description"
     );
-    for (i, (time, event)) in event_db.events.iter().rev().enumerate() {
-        let local_time = Local.timestamp(*time, 0);
+    for days_back in 0..range {
+        println!("{}", (date - Duration::days(days_back)).format("%Y-%m-%d %a"));
+        for (i, (time, event)) in event_db.events.iter().rev().enumerate() {
+            let local_time = Local.timestamp(*time, 0);
 
-        use std::cmp::Ordering;
-        match local_time.date().cmp(&date) {
-            Ordering::Less => break,
-            Ordering::Equal => (),
-            Ordering::Greater => continue,
+            use std::cmp::Ordering;
+            match local_time.date().cmp(&(date - Duration::days(days_back))) {
+                Ordering::Less => break,
+                Ordering::Equal => (),
+                Ordering::Greater => continue,
+            }
+
+            let time_string = local_time.format("%H:%M").to_string();
+
+            let num_tags = event.tag_ids.len();
+            let only_tags = event
+                .tag_ids
+                .iter()
+                .map(|i| &*event_db.tags.get(i).unwrap().short_name)
+                .collect::<Vec<&str>>()
+                .join(" ");
+            let tags_string = format!("{}: {}", num_tags, only_tags);
+
+            let description = &event.description;
+
+            println!(
+                "{:>14.14} {:>6.6} {: <15.15} {: <42.42}",
+                time_string, i, tags_string, description
+            );
         }
-
-        let time_string = local_time.format("%Y-%m-%d %H:%M").to_string();
-
-        let num_tags = event.tag_ids.len();
-        let only_tags = event
-            .tag_ids
-            .iter()
-            .map(|i| &*event_db.tags.get(i).unwrap().short_name)
-            .collect::<Vec<&str>>()
-            .join(" ");
-        let tags_string = format!("{}: {}", num_tags, only_tags);
-
-        let description = &event.description;
-
-        println!(
-            "{0: <4} {1: <17} {2: <15} {3: <45}",
-            i, time_string, tags_string, description
-        );
     }
 
     Ok(())
