@@ -11,10 +11,8 @@ use chrono::{ParseResult,
              {prelude::*, Duration}};
 use clap::{App, Arg, SubCommand};
 use std::{fs::File,
-          io::{self, prelude::*},
-          path::Path,
-          str::FromStr};
-use time_track::{Event, EventDB};
+          io::self,
+          path::Path};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct Config {
@@ -24,12 +22,6 @@ const CONFIG_PATH: &str = "config.json";
 const YMD_FORMAT: &str = "%Y-%m-%d";
 
 impl Config {
-    fn new() -> Config {
-        Config {
-            path: "time_track_db.json".to_string(),
-        }
-    }
-
     fn read() -> io::Result<Config> {
         let file = File::open(CONFIG_PATH)?;
         let config = serde_json::from_reader(file)?;
@@ -393,8 +385,6 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         event_db.events.insert(date_time.timestamp(), event);
     }
 
-    let day = matches.value_of("day");
-
     if let Some(message) = matches.value_of("message") {
         match event_db.get_event_mut(event_position) {
             Some(e) => {
@@ -455,7 +445,7 @@ fn remove_tag(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let mut event_db = time_track::EventDB::read(path)?;
 
     if let Some(short_name) = matches.value_of("short") {
-        event_db.remove_tag(short_name.to_string());
+        event_db.remove_tag(short_name.to_string()).unwrap();
         event_db.write(path)?;
     }
 
