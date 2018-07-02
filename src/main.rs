@@ -8,14 +8,14 @@ extern crate clap;
 extern crate directories;
 extern crate time_track;
 
-use chrono::{ParseResult,
-             {prelude::*, Duration}};
+use chrono::{
+    ParseResult, {prelude::*, Duration},
+};
 use clap::{App, Arg, SubCommand};
 use directories::ProjectDirs;
-use std::{fs::{self,
-               File},
-          io::self,
-          path::Path};
+use std::{
+    fs::{self, File}, io, path::Path,
+};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct Config {
@@ -36,8 +36,14 @@ impl Config {
             config = serde_json::from_reader(file)?;
         } else {
             config = Config {
-                config_path: config_path.to_str().expect("Could not parse config path to string").to_string(),
-                database_path: database_path.to_str().expect("Could not parse database path to string").to_string(),
+                config_path: config_path
+                    .to_str()
+                    .expect("Could not parse config path to string")
+                    .to_string(),
+                database_path: database_path
+                    .to_str()
+                    .expect("Could not parse database path to string")
+                    .to_string(),
             };
             config.write()?;
         }
@@ -45,7 +51,9 @@ impl Config {
     }
 
     fn write(&self) -> io::Result<File> {
-        let directory = Path::new(&self.config_path).parent().expect("Invalid config file location");
+        let directory = Path::new(&self.config_path)
+            .parent()
+            .expect("Invalid config file location");
         if !directory.exists() {
             fs::create_dir_all(directory)?;
         }
@@ -205,7 +213,10 @@ fn main() {
 
     let proj_dirs = ProjectDirs::from("com", "Orsvarn", "TimeTrack");
     let config_dir = proj_dirs.config_dir();
-    let cfg = Config::read(config_dir).expect(&format!("Could not read config file in dir: {:?}", config_dir));
+    let cfg = Config::read(config_dir).expect(&format!(
+        "Could not read config file in dir: {:?}",
+        config_dir
+    ));
 
     if let Some(matches) = matches.subcommand_matches("add") {
         add_event(matches, &cfg).unwrap();
@@ -312,8 +323,8 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             Ok(i) => i,
             Err(e) => {
                 println!("Could not parse \"range\": {:?}", e);
-                return Ok(())
-            },
+                return Ok(());
+            }
         },
         None => 0,
     };
@@ -323,7 +334,10 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         "Time", "Pos", "Tags", "Description"
     );
     for days_back in 0..range {
-        println!("{}", (date - Duration::days(days_back)).format("%Y-%m-%d %a"));
+        println!(
+            "{}",
+            (date - Duration::days(days_back)).format("%Y-%m-%d %a")
+        );
         for (i, (time, event)) in event_db.events.iter().rev().enumerate() {
             let local_time = Local.timestamp(*time, 0);
 
