@@ -5,31 +5,52 @@ extern crate serde_json;
 
 extern crate chrono;
 extern crate clap;
+extern crate directories;
 extern crate time_track;
 
 use chrono::{ParseResult,
              {prelude::*, Duration}};
 use clap::{App, Arg, SubCommand};
-use std::{fs::File,
+use directories::ProjectDirs;
+use std::{fs::{self,
+               File},
           io::self,
           path::Path};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct Config {
-    path: String,
+    config_path: String,
+    database_path: String,
 }
-const CONFIG_PATH: &str = "config.json";
+
 const YMD_FORMAT: &str = "%Y-%m-%d";
 
 impl Config {
-    fn read() -> io::Result<Config> {
-        let file = File::open(CONFIG_PATH)?;
-        let config = serde_json::from_reader(file)?;
+    fn read(path: &Path) -> io::Result<Config> {
+        let config_path = path.join("config.json");
+        let database_path = path.join("database.json");
+
+        let config;
+        if path.is_file() {
+            let file = File::open(path)?;
+            config = serde_json::from_reader(file)?;
+        } else {
+            config = Config {
+                config_path: config_path.to_str().expect("Could not parse config path to string").to_string(),
+                database_path: database_path.to_str().expect("Could not parse database path to string").to_string(),
+            };
+            config.write()?;
+        }
         Ok(config)
     }
 
     fn write(&self) -> io::Result<File> {
-        let file = File::create(CONFIG_PATH)?;
+        let directory = Path::new(&self.config_path).parent().expect("Invalid config file location");
+        if !directory.exists() {
+            fs::create_dir_all(directory)?;
+        }
+
+        let file = File::create(&self.config_path)?;
         serde_json::to_writer_pretty(&file, self)?;
         Ok(file)
     }
@@ -182,7 +203,9 @@ fn main() {
         )
         .get_matches();
 
-    let cfg = Config::read().unwrap();
+    let proj_dirs = ProjectDirs::from("com", "Orsvarn", "TimeTrack");
+    let config_dir = proj_dirs.config_dir();
+    let cfg = Config::read(config_dir).expect(&format!("Could not read config file in dir: {:?}", config_dir));
 
     if let Some(matches) = matches.subcommand_matches("add") {
         add_event(matches, &cfg).unwrap();
@@ -222,7 +245,7 @@ fn add_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let tags = matches.value_of("tags").unwrap_or("");
     let tags: Vec<_> = tags.split_whitespace().collect();
 
-    let path = Path::new(&config.path);
+    let path = Path::new(&config.database_path);
     let mut event_db = time_track::EventDB::read(path)?;
     event_db.add_event(timestamp, description, &tags).unwrap();
     event_db.write(path)?;
@@ -232,7 +255,7 @@ fn add_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
 fn remove_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     // TODO: Edit this function to use the position system instead of specific times.
-    let path = Path::new(&config.path);
+    let path = Path::new(&config.database_path);
     let mut event_db = time_track::EventDB::read(path)?;
 
     let mut event_position = 0;
@@ -260,7 +283,7 @@ fn remove_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
 /// Prints out all events on a given day.
 fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
-    let path = Path::new(&config.path);
+    let path = Path::new(&config.database_path);
     let event_db = time_track::EventDB::read(path)?;
 
     let mut date: chrono::Date<Local> = match matches.value_of("date") {
@@ -351,7 +374,7 @@ fn parse_date(date_str: &str) -> ParseResult<Date<Local>> {
 }
 
 fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
-    let path = Path::new(&config.path);
+    let path = Path::new(&config.database_path);
     let mut event_db = time_track::EventDB::read(path)?;
 
     let mut event_position = 0;
@@ -427,7 +450,7 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 }
 
 fn add_tag(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
-    let path = Path::new(&config.path);
+    let path = Path::new(&config.database_path);
     let mut event_db = time_track::EventDB::read(path)?;
 
     // I can unwrap these because these arguments are required in Clap.
@@ -441,7 +464,7 @@ fn add_tag(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 }
 
 fn remove_tag(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
-    let path = Path::new(&config.path);
+    let path = Path::new(&config.database_path);
     let mut event_db = time_track::EventDB::read(path)?;
 
     if let Some(short_name) = matches.value_of("short") {
@@ -456,7 +479,7 @@ fn config(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let mut config_new = config.clone();
 
     if let Some(path) = matches.value_of("path") {
-        config_new.path = path.to_string();
+        config_new.database_path = path.to_string();
     }
 
     config_new.write()?;
