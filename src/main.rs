@@ -331,25 +331,27 @@ fn print_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             Ok(p) => p as usize,
             _ => {
                 println!("Could not parse position value");
-                return Ok(())
+                return Ok(());
             }
         };
-        let (time, event) = match event_db
-            .get_event(position) {
-                Some(t) => (t.0, t.1),
-                None => {
-                    println!("Could not find an event at position {}", position);
-                    return Ok(())
-                }
+        let (time, event) = match event_db.get_event(position) {
+            Some(t) => (t.0, t.1),
+            None => {
+                println!("Could not find an event at position {}", position);
+                return Ok(());
+            }
         };
         let time = Local.timestamp(time, 0).format("%Y-%m-%d %H:%M:%S, %A");
         let tags = event
-                .tag_ids
-                .iter()
-                .map(|i| &*event_db.tags.get(i).unwrap().short_name)
-                .collect::<Vec<&str>>()
-                .join(", ");
-        println!("   Position: {}\n       Time: {}\n       Tags: {}\nDescription: {}", position, time, tags, event.description);
+            .tag_ids
+            .iter()
+            .map(|i| &*event_db.tags.get(i).unwrap().short_name)
+            .collect::<Vec<&str>>()
+            .join(", ");
+        println!(
+            "   Position: {}\n       Time: {}\n       Tags: {}\nDescription: {}",
+            position, time, tags, event.description
+        );
     }
 
     Ok(())
