@@ -181,6 +181,10 @@ fn main() {
                 ),
         )
         .subcommand(
+            SubCommand::with_name("tags")
+                .about("Lists all available tags")
+        )
+        .subcommand(
             SubCommand::with_name("add_tag")
                 .about("Adds a tag to the database")
                 .arg(
@@ -239,6 +243,9 @@ fn main() {
     }
     if let Some(matches) = matches.subcommand_matches("edit") {
         edit_event(matches, &cfg).unwrap();
+    }
+    if let Some(_matches) = matches.subcommand_matches("tags") {
+        list_tags(&cfg).unwrap();
     }
     if let Some(matches) = matches.subcommand_matches("add_tag") {
         add_tag(matches, &cfg).unwrap();
@@ -470,6 +477,18 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
     event_db.write(path)?;
     println!("Sucessfully edited the event");
+    Ok(())
+}
+
+fn list_tags(config: &Config) -> io::Result<()> {
+    let path = Path::new(&config.database_path);
+    let event_db = time_track::EventDB::read(path)?;
+
+    println!("Tags:");
+    for (id, tag) in event_db.tags_iter() {
+        println!("{}: {} - {}", id, tag.short_name, tag.long_name);
+    }
+
     Ok(())
 }
 
