@@ -107,6 +107,16 @@ fn main() {
                 ),
         )
         .subcommand(
+            SubCommand::with_name("print")
+                .about("Prints all information about the event at the given position")
+                .arg(
+                    Arg::with_name("position")
+                        .help("The position of the event to print")
+                        .takes_value(true)
+                        .required(true),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("rm")
                 .about("Removes an event based on its position")
                 .arg(
@@ -238,6 +248,9 @@ fn main() {
     if let Some(matches) = matches.subcommand_matches("rm") {
         remove_event(matches, &cfg).unwrap();
     }
+    if let Some(matches) = matches.subcommand_matches("print") {
+        print_event(matches, &cfg).unwrap();
+    }
     if let Some(matches) = matches.subcommand_matches("log") {
         log(matches, &cfg).unwrap();
     }
@@ -305,6 +318,39 @@ fn remove_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         }
         None => println!("Could not find an event at the given position"),
     };
+
+    Ok(())
+}
+
+fn print_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
+    let path = Path::new(&config.database_path);
+    let event_db = time_track::EventDB::read(path)?;
+
+    if let Some(position) = matches.value_of("position") {
+        let position = match position.parse::<i64>() {
+            Ok(p) => p as usize,
+            _ => {
+                println!("Could not parse position value");
+                return Ok(())
+            }
+        };
+        let (time, event) = match event_db
+            .get_event(position) {
+                Some(t) => (t.0, t.1),
+                None => {
+                    println!("Could not find an event at position {}", position);
+                    return Ok(())
+                }
+        };
+        let time = Local.timestamp(time, 0).format("%Y-%m-%d %H:%M:%S, %A");
+        let tags = event
+                .tag_ids
+                .iter()
+                .map(|i| &*event_db.tags.get(i).unwrap().short_name)
+                .collect::<Vec<&str>>()
+                .join(", ");
+        println!("   Position: {}\n       Time: {}\n       Tags: {}\nDescription: {}", position, time, tags, event.description);
+    }
 
     Ok(())
 }
@@ -380,6 +426,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
                 if current_day == Local::today() {
                     print!(" (today)");
                 }
+
                 println!("");
                 printed_date = true;
             }
@@ -408,7 +455,13 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
                 }
             };
 
-            print_table(&i.to_string(), &duration, &time_string, &tags_string, description);
+            print_table(
+                &i.to_string(),
+                &duration,
+                &time_string,
+                &tags_string,
+                description,
+            );
         }
     }
 
