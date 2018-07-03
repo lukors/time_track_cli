@@ -17,29 +17,43 @@ use std::{
     fs::{self, File}, io, path::Path,
 };
 
+const YMD_FORMAT: &str = "%Y-%m-%d";
+
+#[cfg(debug_assertions)]
+const CONFIG_FILENAME: &str = "config_debug.json";
+#[cfg(not(debug_assertions))]
+const CONFIG_FILENAME: &str = "config.json";
+
+#[cfg(debug_assertions)]
+const DATABASE_FILENAME: &str = "database_debug.json";
+#[cfg(not(debug_assertions))]
+const DATABASE_FILENAME: &str = "database.json";
+
+const QUALIFIER: &str = "com";
+const ORGANIZATION: &str = "Orsvarn";
+const APPLICATION: &str = "TimeTrack";
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct Config {
-    config_path: String,
     database_path: String,
 }
 
-const YMD_FORMAT: &str = "%Y-%m-%d";
-
 impl Config {
-    fn read(path: &Path) -> io::Result<Config> {
-        let config_path = path.join("config.json");
-        let database_path = path.join("database.json");
+    fn read() -> io::Result<Config> {
+        let proj_dirs = ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION);
+
+        let config_dir = proj_dirs.config_dir();
+        let data_dir = proj_dirs.data_dir();
+
+        let config_path = config_dir.join(CONFIG_FILENAME);
+        let database_path = data_dir.join(DATABASE_FILENAME);
 
         let config;
-        if path.is_file() {
-            let file = File::open(path)?;
+        if config_path.is_file() {
+            let file = File::open(config_path)?;
             config = serde_json::from_reader(file)?;
         } else {
             config = Config {
-                config_path: config_path
-                    .to_str()
-                    .expect("Could not parse config path to string")
-                    .to_string(),
                 database_path: database_path
                     .to_str()
                     .expect("Could not parse database path to string")
@@ -51,14 +65,15 @@ impl Config {
     }
 
     fn write(&self) -> io::Result<File> {
-        let directory = Path::new(&self.config_path)
-            .parent()
-            .expect("Invalid config file location");
-        if !directory.exists() {
-            fs::create_dir_all(directory)?;
+        let proj_dirs = ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION);
+
+        let config_dir = proj_dirs.config_dir();
+        if !config_dir.exists() {
+            fs::create_dir_all(config_dir)?;
         }
 
-        let file = File::create(&self.config_path)?;
+        let config_path = config_dir.join(CONFIG_FILENAME);
+        let file = File::create(config_path)?;
         serde_json::to_writer_pretty(&file, self)?;
         Ok(file)
     }
@@ -211,15 +226,10 @@ fn main() {
         )
         .get_matches();
 
-    let proj_dirs = ProjectDirs::from("com", "Orsvarn", "TimeTrack");
-    let config_dir = proj_dirs.config_dir();
-    let cfg = Config::read(config_dir).expect(&format!(
-        "Could not read config file in dir: {:?}",
-        config_dir
-    ));
+    let cfg = Config::read().expect("Could not read config file");
 
     if let Some(matches) = matches.subcommand_matches("add") {
-        add_event(matches, &cfg).unwrap();
+        add_event(matches, &cfg).expect("Failed adding event");
     }
     if let Some(matches) = matches.subcommand_matches("remove") {
         remove_event(matches, &cfg).unwrap();
