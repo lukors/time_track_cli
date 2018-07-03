@@ -119,22 +119,22 @@ fn main() {
             SubCommand::with_name("log")
                 .about("Lists events on a given day")
                 .arg(
-                    Arg::with_name("day")
-                        .help("How many days back from the \"date\" to list events")
+                    Arg::with_name("range")
+                        .help("How many days into the past to list")
                         .takes_value(true),
                 )
                 .arg(
                     Arg::with_name("date")
-                        .help("What date to start from")
+                        .help("What date to start from, defaults to today")
                         .short("d")
                         .long("date")
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("range")
-                        .help("How many days into the past to list")
-                        .short("r")
-                        .long("range")
+                    Arg::with_name("back")
+                        .help("How many days before \"date\" to start listing")
+                        .short("b")
+                        .long("back")
                         .takes_value(true),
                 ),
         )
@@ -278,6 +278,7 @@ fn add_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     event_db.add_event(timestamp, description, &tags).unwrap();
     event_db.write(path)?;
 
+    println!("Added event");
     Ok(())
 }
 
@@ -314,6 +315,17 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
     let event_db = time_track::EventDB::read(path)?;
 
+    let range = match matches.value_of("range") {
+        Some(r) => match r.parse::<i64>() {
+            Ok(i) => i,
+            Err(e) => {
+                println!("Could not parse \"range\": {:?}", e);
+                return Ok(());
+            }
+        },
+        None => 1,
+    };
+
     let mut date: chrono::Date<Local> = match matches.value_of("date") {
         Some(date_str) => match parse_date(date_str) {
             Ok(dt) => dt,
@@ -325,26 +337,15 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         None => Local::today(),
     };
 
-    if let Some(day) = matches.value_of("day") {
-        match day.parse::<i64>() {
+    if let Some(back) = matches.value_of("back") {
+        match back.parse::<i64>() {
             Ok(d) => date = date - Duration::days(d),
             Err(e) => {
-                println!("Error when parsing \"day\" argument: {:?}", e);
+                println!("Error when parsing \"back\" argument: {:?}", e);
                 return Ok(());
             }
         }
     }
-
-    let range = match matches.value_of("range") {
-        Some(r) => match r.parse::<i64>() {
-            Ok(i) => i,
-            Err(e) => {
-                println!("Could not parse \"range\": {:?}", e);
-                return Ok(());
-            }
-        },
-        None => 0,
-    };
 
     println!(
         "{:<14.14} {:>6.6} {:<15.15} {:<42.42}",
@@ -384,6 +385,8 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             );
         }
     }
+
+    println!("End");
 
     Ok(())
 }
