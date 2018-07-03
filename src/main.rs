@@ -107,7 +107,7 @@ fn main() {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("remove")
+            SubCommand::with_name("rm")
                 .about("Removes an event based on its position")
                 .arg(
                     Arg::with_name("position")
@@ -235,7 +235,7 @@ fn main() {
     if let Some(matches) = matches.subcommand_matches("add") {
         add_event(matches, &cfg).expect("Failed adding event");
     }
-    if let Some(matches) = matches.subcommand_matches("remove") {
+    if let Some(matches) = matches.subcommand_matches("rm") {
         remove_event(matches, &cfg).unwrap();
     }
     if let Some(matches) = matches.subcommand_matches("log") {
