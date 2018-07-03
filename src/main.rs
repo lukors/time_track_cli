@@ -352,15 +352,18 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         "Time", "Pos", "Tags", "Description"
     );
     for days_back in 0..range {
-        println!(
-            "{}",
-            (date - Duration::days(days_back)).format("%Y-%m-%d %a")
-        );
+        let current_day = date - Duration::days(days_back);
+
+        print!("{}", current_day.format("%Y-%m-%d %a"));
+        if current_day == Local::today() {
+            print!(" (today)");
+        }
+        println!("");
         for (i, (time, event)) in event_db.events.iter().rev().enumerate() {
             let local_time = Local.timestamp(*time, 0);
 
             use std::cmp::Ordering;
-            match local_time.date().cmp(&(date - Duration::days(days_back))) {
+            match local_time.date().cmp(&current_day) {
                 Ordering::Less => break,
                 Ordering::Equal => (),
                 Ordering::Greater => continue,
