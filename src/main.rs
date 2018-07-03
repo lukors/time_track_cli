@@ -354,11 +354,8 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     for days_back in 0..range {
         let current_day = date - Duration::days(days_back);
 
-        print!("{}", current_day.format("%Y-%m-%d %a"));
-        if current_day == Local::today() {
-            print!(" (today)");
-        }
-        println!("");
+        let mut printed_date = false;
+
         for (i, (time, event)) in event_db.events.iter().rev().enumerate() {
             let local_time = Local.timestamp(*time, 0);
 
@@ -367,6 +364,15 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
                 Ordering::Less => break,
                 Ordering::Equal => (),
                 Ordering::Greater => continue,
+            }
+
+            if !printed_date {
+                print!("{}", current_day.format("%Y-%m-%d %a"));
+                if current_day == Local::today() {
+                    print!(" (today)");
+                }
+                println!("");
+                printed_date = true;
             }
 
             let time_string = local_time.format("%H:%M").to_string();
