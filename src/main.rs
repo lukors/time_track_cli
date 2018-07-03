@@ -317,7 +317,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
     let range = match matches.value_of("range") {
         Some(r) => match r.parse::<i64>() {
-            Ok(i) => i,
+            Ok(i) => i + 1,
             Err(e) => {
                 println!("Could not parse \"range\": {:?}", e);
                 return Ok(());
