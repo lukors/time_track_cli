@@ -395,14 +395,14 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     }
 
     println!(
-        "Printing events between {} and {}",
+        "Printing events on and between {} and {}\n",
         date.format("%a %Y-%m-%d"),
-        (date - Duration::days(range)).format("%a %Y-%m-%d")
+        (date - Duration::days(range - 1)).format("%a %Y-%m-%d")
     );
 
     fn print_table(pos: &str, duration: &str, time: &str, tags: &str, description: &str) {
         println!(
-            "{:<6.6} {:<4.4} {:<5.5} {:<15.15} {:<46.46}",
+            "{:<6.6}|{:<4.4}|{:<5.5}|{:<15.15}|{:<46.46}",
             pos, duration, time, tags, description
         );
     }
@@ -424,7 +424,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             }
 
             if !printed_date {
-                print!("{}", current_day.format("%Y-%m-%d %a"));
+                print!("{}", current_day.format("\n%Y-%m-%d %a"));
                 if current_day == Local::today() {
                     print!(" (today)");
                 }
@@ -467,7 +467,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         }
     }
 
-    println!("End");
+    println!("\nEnd");
 
     Ok(())
 }
