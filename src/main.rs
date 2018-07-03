@@ -347,6 +347,8 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         }
     }
 
+    println!("Printing events between {} and {}", date.format("%a %Y-%m-%d"), (date - Duration::days(range)).format("%a %Y-%m-%d"));
+
     println!(
         "{:<14.14} {:>6.6} {:<15.15} {:<42.42}",
         "Time", "Pos", "Tags", "Description"
