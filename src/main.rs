@@ -278,7 +278,6 @@ fn add_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     event_db.add_event(timestamp, description, &tags).unwrap();
     event_db.write(path)?;
 
-    println!("Added event");
     Ok(())
 }
 
@@ -354,7 +353,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     );
 
     println!(
-        "{:<14.14} {:>6.6} {:<15.15} {:<42.42}",
+        "{:<5.5} {:>6.6} {:<15.15} {:<51.51}",
         "Time", "Pos", "Tags", "Description"
     );
     for days_back in 0..range {
@@ -395,7 +394,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             let description = &event.description;
 
             println!(
-                "{:>14.14} {:>6.6} {: <15.15} {: <42.42}",
+                "{:>5.5} {:>6.6} {: <15.15} {: <51.51}",
                 time_string, i, tags_string, description
             );
         }
