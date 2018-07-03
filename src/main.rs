@@ -352,10 +352,14 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         (date - Duration::days(range)).format("%a %Y-%m-%d")
     );
 
-    println!(
-        "{:<5.5} {:>6.6} {:<15.15} {:<51.51}",
-        "Time", "Pos", "Tags", "Description"
-    );
+    fn print_table(pos: &str, time: &str, tags: &str, description: &str) {
+        println!(
+            "{:<6.6} {:<5.5} {:<15.15} {:<51.51}",
+            pos, time, tags, description
+        );
+    }
+
+    print_table("Pos", "Time", "Tags", "Description");
     for days_back in 0..range {
         let current_day = date - Duration::days(days_back);
 
@@ -393,10 +397,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
             let description = &event.description;
 
-            println!(
-                "{:>5.5} {:>6.6} {: <15.15} {: <51.51}",
-                time_string, i, tags_string, description
-            );
+            print_table(&i.to_string(), &time_string, &tags_string, description);
         }
     }
 
