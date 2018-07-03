@@ -397,10 +397,18 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
             let description = &event.description;
 
-            let duration = event_db.get_event_duration(i).unwrap_or(0);
-            let duration = duration as f32 / 60. / 60.;
+            let duration = {
+                if description.is_empty() && num_tags == 0 {
+                    "".to_string()
+                } else {
+                    let duration = event_db.get_event_duration(i).unwrap_or(0);
+                    let duration = duration as f32 / 60. / 60.;
+                    let duration = format!("{:.1}", duration);
+                    duration
+                }
+            };
 
-            print_table(&i.to_string(), &duration.to_string(), &time_string, &tags_string, description);
+            print_table(&i.to_string(), &duration, &time_string, &tags_string, description);
         }
     }
 
