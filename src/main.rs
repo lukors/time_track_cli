@@ -334,7 +334,7 @@ fn print_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
                 return Ok(());
             }
         };
-        let (time, event) = match event_db.get_event(position) {
+        let (time, event) = match event_db.get_event_from_pos(position) {
             Some(t) => (t.0, t.1),
             None => {
                 println!("Could not find an event at position {}", position);
@@ -400,6 +400,9 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         (date - Duration::days(range - 1)).format("%a %Y-%m-%d")
     );
 
+    let log_data = event_db.get_log_data(&date, &(date - Duration::days(0)));
+    println!("log_data: {:#?}", log_data);
+
     fn print_table(pos: &str, duration: &str, time: &str, tags: &str, description: &str) {
         println!(
             "{:<6.6}|{:<4.4}|{:<5.5}|{:<15.15}|{:<46.46}",
@@ -450,7 +453,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
                 if description.is_empty() && num_tags == 0 {
                     "".to_string()
                 } else {
-                    let duration = event_db.get_event_duration(i).unwrap_or(0);
+                    let duration = event_db.get_event_duration_from_pos(i).unwrap_or(0);
                     let duration = duration as f32 / 60. / 60.;
                     let duration = format!("{:.1}", duration);
                     duration
