@@ -364,13 +364,13 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
     let range = match matches.value_of("range") {
         Some(r) => match r.parse::<i64>() {
-            Ok(i) => i + 1,
+            Ok(i) => i,
             Err(e) => {
                 println!("Could not parse \"range\": {:?}", e);
                 return Ok(());
             }
         },
-        None => 1,
+        None => 0,
     };
 
     let mut date: chrono::Date<Local> = match matches.value_of("date") {
@@ -394,14 +394,15 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         }
     }
 
-    println!(
-        "Printing events on and between {} and {}\n",
-        date.format("%a %Y-%m-%d"),
-        (date - Duration::days(range - 1)).format("%a %Y-%m-%d")
-    );
+    match range {
+        0 => println!("Printing events on {}", date.format("%a %Y-%m-%d")),
+        _ => println!(
+            "Printing events from {} to {}\n",
+            date.format("%a %Y-%m-%d"),
+            (date - Duration::days(range)).format("%a %Y-%m-%d"),
+            ),
+    }
 
-    let log_data = event_db.get_log_data(&date, &(date - Duration::days(0)));
-    println!("log_data: {:#?}", log_data);
 
     fn print_table(pos: &str, duration: &str, time: &str, tags: &str, description: &str) {
         println!(
@@ -411,63 +412,44 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     }
 
     print_table("Pos", "Dur", "Time", "Tags", "Description");
-    for days_back in 0..range {
-        let current_day = date - Duration::days(days_back);
+    
+    let log_events = event_db.get_log_data(&date, &(date - Duration::days(range)));
+    let mut current_date: Option<Date<Local>> = None;
+    for log_event in log_events {
+        let event_date = Local.timestamp(log_event.timestamp, 0).date();
 
-        let mut printed_date = false;
+        if current_date.is_none() || event_date != current_date.unwrap() {
+            println!("\n{}", event_date.format("%Y-%m-%d %a"));
+            current_date = Some(event_date);
+        }
 
-        for (i, (time, event)) in event_db.events.iter().rev().enumerate() {
-            let local_time = Local.timestamp(*time, 0);
-
-            use std::cmp::Ordering;
-            match local_time.date().cmp(&current_day) {
-                Ordering::Less => break,
-                Ordering::Equal => (),
-                Ordering::Greater => continue,
-            }
-
-            if !printed_date {
-                print!("{}", current_day.format("\n%Y-%m-%d %a"));
-                if current_day == Local::today() {
-                    print!(" (today)");
+        let duration_string = match log_event.duration {
+            Some(d) => {
+                if log_event.event.tag_ids.is_empty() {
+                    "".to_string()
+                } else {
+                    format!("{:.1}", d as f32 / 60. / 60.).to_string()
                 }
+            },
+            None => "".to_string(),
+        };
 
-                println!("");
-                printed_date = true;
-            }
+        let time_string = Local.timestamp(log_event.timestamp, 0).format("%H:%M").to_string();
 
-            let time_string = local_time.format("%H:%M").to_string();
-
-            let num_tags = event.tag_ids.len();
-            let only_tags = event
+        let tag_string: String = log_event.event
                 .tag_ids
                 .iter()
                 .map(|i| &*event_db.tags.get(i).unwrap().short_name)
                 .collect::<Vec<&str>>()
                 .join(" ");
-            let tags_string = format!("{}: {}", num_tags, only_tags);
 
-            let description = &event.description;
-
-            let duration = {
-                if description.is_empty() && num_tags == 0 {
-                    "".to_string()
-                } else {
-                    let duration = event_db.get_event_duration_from_pos(i).unwrap_or(0);
-                    let duration = duration as f32 / 60. / 60.;
-                    let duration = format!("{:.1}", duration);
-                    duration
-                }
-            };
-
-            print_table(
-                &i.to_string(),
-                &duration,
-                &time_string,
-                &tags_string,
-                description,
-            );
-        }
+        print_table(
+            &log_event.position.to_string(),
+            &duration_string,
+            &time_string,
+            &tag_string,
+            &log_event.event.description,
+        );
     }
 
     println!("\nEnd");
