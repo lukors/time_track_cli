@@ -418,10 +418,32 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         );
     }
 
+    let filter_tags = matches.value_of("filter").unwrap_or("");
+    let filter_tags: Vec<_> = filter_tags.split_whitespace().collect();
+    let filter_tag_ids: Vec<u16> = filter_tags
+        .iter()
+        .map(|ft| {
+            event_db
+                .tag_id_from_short_name(ft)
+                .expect("Unable to find tag(s) with the given short name(s)")
+        })
+        .collect();
+
+    let mut current_date: Option<Date<Local>> = None;
+
     print_table("Pos", "Dur", "Time", "Tags", "Description");
 
     let log_events = event_db.get_log_data(&date, &(date - Duration::days(range)));
-    let mut current_date: Option<Date<Local>> = None;
+    let log_events = log_events.iter().filter(|filter_event| {
+        filter_tag_ids.iter().all(|filter_tag_id| {
+            filter_event
+                .event
+                .tag_ids
+                .iter()
+                .any(|tag_id| tag_id == filter_tag_id)
+        })
+    });
+
     for log_event in log_events {
         let event_date = Local.timestamp(log_event.timestamp, 0).date();
 
