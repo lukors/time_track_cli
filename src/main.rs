@@ -145,6 +145,13 @@ fn main() {
                         .short("b")
                         .long("back")
                         .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("filter")
+                        .help("Only log events with the given tags")
+                        .short("f")
+                        .long("filter")
+                        .takes_value(true),
                 ),
         )
         .subcommand(
@@ -222,7 +229,7 @@ fn main() {
                     Arg::with_name("short")
                         .short("s")
                         .long("short")
-                        .help("The short name for the tag to remove")
+                        .help("The short name of the tag to remove")
                         .takes_value(true)
                         .required(true),
                 ),
@@ -401,9 +408,8 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             "Printing events from {} to {}\n",
             date.format("%a %Y-%m-%d"),
             (date - Duration::days(range)).format("%a %Y-%m-%d"),
-            ),
+        ),
     }
-
 
     fn print_table(pos: &str, duration: &str, time: &str, tags: &str, description: &str) {
         println!(
@@ -413,7 +419,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     }
 
     print_table("Pos", "Dur", "Time", "Tags", "Description");
-    
+
     let log_events = event_db.get_log_data(&date, &(date - Duration::days(range)));
     let mut current_date: Option<Date<Local>> = None;
     for log_event in log_events {
@@ -431,18 +437,22 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
                 } else {
                     format!("{:.1}", d as f32 / 60. / 60.).to_string()
                 }
-            },
+            }
             None => "".to_string(),
         };
 
-        let time_string = Local.timestamp(log_event.timestamp, 0).format("%H:%M").to_string();
+        let time_string = Local
+            .timestamp(log_event.timestamp, 0)
+            .format("%H:%M")
+            .to_string();
 
-        let tag_string: String = log_event.event
-                .tag_ids
-                .iter()
-                .map(|i| &*event_db.tags.get(i).unwrap().short_name)
-                .collect::<Vec<&str>>()
-                .join(" ");
+        let tag_string: String = log_event
+            .event
+            .tag_ids
+            .iter()
+            .map(|i| &*event_db.tags.get(i).unwrap().short_name)
+            .collect::<Vec<&str>>()
+            .join(" ");
 
         print_table(
             &log_event.position.to_string(),
