@@ -94,14 +94,13 @@ fn main() {
                 )
                 .arg(
                     Arg::with_name("tags")
-                        .short("t")
-                        .long("tags")
                         .help("The tags to associate with the event")
                         .takes_value(true),
                 )
                 .arg(
                     Arg::with_name("time")
                         .long("time")
+                        .short("t")
                         .help("The time to put the event at")
                         .takes_value(true),
                 ),
@@ -180,12 +179,14 @@ fn main() {
                 .arg(
                     Arg::with_name("add_tags")
                         .long("add_tags")
+                        .short("a")
                         .help("Tags that should be added to the event")
                         .takes_value(true),
                 )
                 .arg(
                     Arg::with_name("rm_tags")
                         .long("rm_tags")
+                        .short("r")
                         .help("Tags that should be removed from the event")
                         .takes_value(true),
                 ),
