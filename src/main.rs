@@ -444,10 +444,26 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         })
     });
 
+    fn i64_to_string(x: i64) -> String {
+        format!("{:.1}", x as f32 / 60. / 60.).to_string()
+    }
+
+    fn print_duration_today(d: i64) {
+        println!("Duration: {}", i64_to_string(d));
+    }
+
+    let mut total_duration = 0i64;
+    let mut daily_duration = 0i64;
+
     for log_event in log_events {
         let event_date = Local.timestamp(log_event.timestamp, 0).date();
 
         if current_date.is_none() || event_date != current_date.unwrap() {
+            if current_date.is_some() {
+                print_duration_today(daily_duration);
+                daily_duration = 0;
+            }
+
             println!("\n{}", event_date.format("%Y-%m-%d %a"));
             current_date = Some(event_date);
         }
@@ -457,7 +473,9 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
                 if log_event.event.tag_ids.is_empty() {
                     "".to_string()
                 } else {
-                    format!("{:.1}", d as f32 / 60. / 60.).to_string()
+                    total_duration += d;
+                    daily_duration += d;
+                    i64_to_string(d)
                 }
             }
             None => "".to_string(),
@@ -485,7 +503,9 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         );
     }
 
-    println!("\nEnd");
+    print_duration_today(daily_duration);
+    println!("\nTotal duration: {}", i64_to_string(total_duration));
+    println!("End");
 
     Ok(())
 }
