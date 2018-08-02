@@ -18,6 +18,7 @@ use std::{
 };
 
 const YMD_FORMAT: &str = "%Y-%m-%d";
+const HM_FORMAT: &str = "%H:%M";
 
 #[cfg(debug_assertions)]
 const CONFIG_FILENAME: &str = "config_debug.json";
@@ -299,11 +300,14 @@ fn add_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     event_db.add_event(timestamp, description, &tags).unwrap();
     event_db.write(path)?;
 
+    let format_str = format!("{} {}", YMD_FORMAT, HM_FORMAT);
+    let time_str = Local.timestamp(timestamp, 0).format(&format_str);
+    println!("Added event: {} {} {:?}", time_str, description, &tags);
+
     Ok(())
 }
 
 fn remove_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
-    // TODO: Edit this function to use the position system instead of specific times.
     let path = Path::new(&config.database_path);
     let mut event_db = time_track::EventDB::read(path)?;
 
@@ -382,8 +386,8 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     };
 
     let mut date: chrono::Date<Local> = match matches.value_of("date") {
-        Some(date_str) => match parse_date(date_str) {
-            Ok(dt) => dt,
+        Some(datetime_str) => match parse_datetime(datetime_str) {
+            Ok(dt) => dt.date(),
             Err(e) => {
                 println!("Error parsing date: {:?}", e);
                 return Ok(());
@@ -406,14 +410,14 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         0 => println!("Printing events on {}", date.format("%a %Y-%m-%d")),
         _ => println!(
             "Printing events from {} to {}\n",
-            date.format("%a %Y-%m-%d"),
             (date - Duration::days(range)).format("%a %Y-%m-%d"),
+            date.format("%a %Y-%m-%d"),
         ),
     }
 
     fn print_table(pos: &str, duration: &str, time: &str, tags: &str, description: &str) {
         println!(
-            "{:<6.6}|{:<4.4}|{:<5.5}|{:<15.15}|{:<46.46}",
+            "{:<6.6}|{:<5.5}|{:<6.6}|{:<16.16}|{:<76.76}",
             pos, duration, time, tags, description
         );
     }
@@ -433,7 +437,10 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
     print_table("Pos", "Dur", "Time", "Tags", "Description");
 
-    let log_events = event_db.get_log_data(&date, &(date - Duration::days(range)));
+    let log_events = event_db.get_log_data(
+        &date.and_hms(23, 59, 59),
+        &(date.and_hms(0, 0, 0) - Duration::days(range)),
+    );
     let log_events = log_events.iter().filter(|filter_event| {
         filter_tag_ids.iter().all(|filter_tag_id| {
             filter_event
@@ -511,21 +518,18 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 }
 
 fn parse_datetime(datetime_str: &str) -> ParseResult<DateTime<Local>> {
-    let datetime_str = match datetime_str.contains(' ') {
-        true => datetime_str.to_string(),
-        false => format!("{} {}", Local::today().format(YMD_FORMAT), datetime_str),
-    };
+    match datetime_str {
+        "now" => Ok(Local::now()),
 
-    Local.datetime_from_str(&datetime_str, &format!("{} {}", YMD_FORMAT, "%H:%M"))
+        dt_str => {
+            let dt_str = match dt_str.contains(' ') {
+                true => dt_str.to_string(),
+                false => format!("{} {}", Local::today().format(YMD_FORMAT), dt_str),
+            };
+            Local.datetime_from_str(&dt_str, &format!("{} {}", YMD_FORMAT, HM_FORMAT))
+        }
+    }
 }
-
-fn parse_date(date_str: &str) -> ParseResult<Date<Local>> {
-    let datetime_str = format!("{} 00:00", date_str);
-    Ok(Local
-        .datetime_from_str(&datetime_str, &format!("{} {}", YMD_FORMAT, "%H:%M"))?
-        .date())
-}
-
 fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
     let mut event_db = time_track::EventDB::read(path)?;
