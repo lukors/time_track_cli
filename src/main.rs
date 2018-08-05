@@ -9,12 +9,15 @@ extern crate directories;
 extern crate time_track;
 
 use chrono::{
-    ParseResult, {prelude::*, Duration},
+    ParseResult,
+    {prelude::*, Duration},
 };
 use clap::{App, Arg, SubCommand};
 use directories::ProjectDirs;
 use std::{
-    fs::{self, File}, io, path::Path,
+    fs::{self, File},
+    io,
+    path::Path,
 };
 
 const YMD_FORMAT: &str = "%Y-%m-%d";
@@ -287,7 +290,7 @@ fn add_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             Err(e) => {
                 println!("Error parsing date/time: {:?}", e);
                 return Ok(());
-            },
+            }
         },
         None => Utc::now().timestamp(),
     };
@@ -301,9 +304,17 @@ fn add_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     event_db.add_event(timestamp, description, &tags).unwrap();
     event_db.write(path)?;
 
+    let duration_str = hour_string_from_i64(
+        event_db
+            .get_event_duration(timestamp)
+            .expect("Could not retrieve event from database after storing it"),
+    );
     let format_str = format!("{} {}", YMD_FORMAT, HM_FORMAT);
     let time_str = Local.timestamp(timestamp, 0).format(&format_str);
-    println!("Added event: {} {} {:?}", time_str, description, &tags);
+    println!(
+        "Added event: {} ({}h): {} {:?}",
+        time_str, duration_str, description, &tags
+    );
 
     Ok(())
 }
@@ -341,18 +352,16 @@ fn print_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
     let position = match matches.value_of("position") {
         Some(p) => match p.parse::<usize>() {
-
-                Ok(x) => x,
-                Err(e) => {
-                    println!("Could not parse \"position\" value: {}", e);
-                    return Ok(())
-                },
-
+            Ok(x) => x,
+            Err(e) => {
+                println!("Could not parse \"position\" value: {}", e);
+                return Ok(());
+            }
         },
         None => {
             println!("Could not parse \"position\" value");
-            return Ok(())
-        },
+            return Ok(());
+        }
     };
 
     let log_event = match event_db.get_log_from_pos(position) {
@@ -360,12 +369,13 @@ fn print_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         None => {
             println!("Could not find an event at the given position");
             return Ok(());
-        },
+        }
     };
 
     let time = Local.timestamp(log_event.timestamp, 0).to_rfc2822();
 
-    let tags = log_event.event
+    let tags = log_event
+        .event
         .tag_ids
         .iter()
         .map(|i| &*event_db.tags.get(i).unwrap().short_name)
@@ -373,10 +383,9 @@ fn print_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         .join(", ");
 
     let duration = match log_event.duration {
-        Some(d) => i64_to_string(d),
+        Some(d) => hour_string_from_i64(d),
         None => "-".to_string(),
     };
-
 
     fn print_key_value(key: &str, value: &str) {
         println!("{:>15.15}: {}", key, value);
@@ -388,11 +397,10 @@ fn print_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     print_key_value("Tags", &tags);
     print_key_value("Position", &position.to_string());
 
-
     Ok(())
 }
 
-fn i64_to_string(x: i64) -> String {
+fn hour_string_from_i64(x: i64) -> String {
     format!("{:.1}", x as f32 / 60. / 60.).to_string()
 }
 
@@ -450,7 +458,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     }
 
     fn print_duration_today(d: i64) {
-        println!("Duration: {}", i64_to_string(d));
+        println!("Duration: {}", hour_string_from_i64(d));
     }
 
     let filter_tags = matches.value_of("filter").unwrap_or("");
@@ -505,7 +513,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
                 } else {
                     total_duration += d;
                     daily_duration += d;
-                    i64_to_string(d)
+                    hour_string_from_i64(d)
                 }
             }
             None => "".to_string(),
@@ -534,7 +542,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     }
 
     print_duration_today(daily_duration);
-    println!("\nTotal duration: {}", i64_to_string(total_duration));
+    println!("\nTotal duration: {}", hour_string_from_i64(total_duration));
     println!("End");
 
     Ok(())
