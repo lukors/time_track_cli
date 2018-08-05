@@ -287,10 +287,11 @@ fn add_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             Err(e) => {
                 println!("Error parsing date/time: {:?}", e);
                 return Ok(());
-            }
+            },
         },
         None => Utc::now().timestamp(),
     };
+
     let description = matches.value_of("message").unwrap_or("");
     let tags = matches.value_of("tags").unwrap_or("");
     let tags: Vec<_> = tags.split_whitespace().collect();
@@ -338,35 +339,61 @@ fn print_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
     let event_db = time_track::EventDB::read(path)?;
 
-    if let Some(position) = matches.value_of("position") {
-        let position = match position.parse::<i64>() {
-            Ok(p) => p as usize,
-            _ => {
-                println!("Could not parse position value");
-                return Ok(());
-            }
-        };
-        let (time, event) = match event_db.get_event_from_pos(position) {
-            Some(t) => (t.0, t.1),
-            None => {
-                println!("Could not find an event at position {}", position);
-                return Ok(());
-            }
-        };
-        let time = Local.timestamp(time, 0).format("%Y-%m-%d %H:%M:%S, %A");
-        let tags = event
-            .tag_ids
-            .iter()
-            .map(|i| &*event_db.tags.get(i).unwrap().short_name)
-            .collect::<Vec<&str>>()
-            .join(", ");
-        println!(
-            "   Position: {}\n       Time: {}\n       Tags: {}\nDescription: {}",
-            position, time, tags, event.description
-        );
+    let position = match matches.value_of("position") {
+        Some(p) => match p.parse::<usize>() {
+
+                Ok(x) => x,
+                Err(e) => {
+                    println!("Could not parse \"position\" value: {}", e);
+                    return Ok(())
+                },
+
+        },
+        None => {
+            println!("Could not parse \"position\" value");
+            return Ok(())
+        },
+    };
+
+    let log_event = match event_db.get_log_from_pos(position) {
+        Some(e) => e,
+        None => {
+            println!("Could not find an event at the given position");
+            return Ok(());
+        },
+    };
+
+    let time = Local.timestamp(log_event.timestamp, 0).to_rfc2822();
+
+    let tags = log_event.event
+        .tag_ids
+        .iter()
+        .map(|i| &*event_db.tags.get(i).unwrap().short_name)
+        .collect::<Vec<&str>>()
+        .join(", ");
+
+    let duration = match log_event.duration {
+        Some(d) => i64_to_string(d),
+        None => "-".to_string(),
+    };
+
+
+    fn print_key_value(key: &str, value: &str) {
+        println!("{:>15.15}: {}", key, value);
     }
 
+    print_key_value("Time", &time.to_string());
+    print_key_value("Duration", &duration);
+    print_key_value("Description", &log_event.event.description);
+    print_key_value("Tags", &tags);
+    print_key_value("Position", &position.to_string());
+
+
     Ok(())
+}
+
+fn i64_to_string(x: i64) -> String {
+    format!("{:.1}", x as f32 / 60. / 60.).to_string()
 }
 
 /// Prints out all events on a given day.
@@ -422,6 +449,10 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         );
     }
 
+    fn print_duration_today(d: i64) {
+        println!("Duration: {}", i64_to_string(d));
+    }
+
     let filter_tags = matches.value_of("filter").unwrap_or("");
     let filter_tags: Vec<_> = filter_tags.split_whitespace().collect();
     let filter_tag_ids: Vec<u16> = filter_tags
@@ -437,7 +468,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
     print_table("Pos", "Dur", "Time", "Tags", "Description");
 
-    let log_events = event_db.get_log_data(
+    let log_events = event_db.get_log_between_times(
         &date.and_hms(23, 59, 59),
         &(date.and_hms(0, 0, 0) - Duration::days(range)),
     );
@@ -450,14 +481,6 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
                 .any(|tag_id| tag_id == filter_tag_id)
         })
     });
-
-    fn i64_to_string(x: i64) -> String {
-        format!("{:.1}", x as f32 / 60. / 60.).to_string()
-    }
-
-    fn print_duration_today(d: i64) {
-        println!("Duration: {}", i64_to_string(d));
-    }
 
     let mut total_duration = 0i64;
     let mut daily_duration = 0i64;
@@ -530,6 +553,7 @@ fn parse_datetime(datetime_str: &str) -> ParseResult<DateTime<Local>> {
         }
     }
 }
+
 fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
     let mut event_db = time_track::EventDB::read(path)?;
