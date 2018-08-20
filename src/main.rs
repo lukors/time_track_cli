@@ -137,10 +137,17 @@ fn main() {
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("date")
+                    Arg::with_name("start")
                         .help("What date to start from, defaults to today")
-                        .short("d")
-                        .long("date")
+                        .short("s")
+                        .long("start")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("end")
+                        .help("What date to end at")
+                        .short("e")
+                        .long("end")
                         .takes_value(true),
                 )
                 .arg(
@@ -426,11 +433,11 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         None => 0,
     };
 
-    let mut date: chrono::Date<Local> = match matches.value_of("date") {
+    let mut start: chrono::Date<Local> = match matches.value_of("start") {
         Some(datetime_str) => match parse_datetime(datetime_str) {
             Ok(dt) => dt.date(),
             Err(e) => {
-                println!("Error parsing date: {:?}", e);
+                println!("Error parsing start date: {:?}", e);
                 return Ok(());
             }
         },
@@ -439,7 +446,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
     if let Some(back) = matches.value_of("back") {
         match back.parse::<i64>() {
-            Ok(d) => date = date - Duration::days(d),
+            Ok(d) => start = start - Duration::days(d),
             Err(e) => {
                 println!("Error when parsing \"back\" argument: {:?}", e);
                 return Ok(());
@@ -448,11 +455,11 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     }
 
     match range {
-        0 => println!("Printing events on {}", date.format("%a %Y-%m-%d")),
+        0 => println!("Printing events on {}", start.format("%a %Y-%m-%d")),
         _ => println!(
             "Printing events from {} to {}\n",
-            (date - Duration::days(range)).format("%a %Y-%m-%d"),
-            date.format("%a %Y-%m-%d"),
+            (start - Duration::days(range)).format("%a %Y-%m-%d"),
+            start.format("%a %Y-%m-%d"),
         ),
     }
 
@@ -483,8 +490,8 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     print_table("Pos", "Dur", "Time", "Tags", "Description");
 
     let log_events = event_db.get_log_between_times(
-        &date.and_hms(23, 59, 59),
-        &(date.and_hms(0, 0, 0) - Duration::days(range)),
+        &start.and_hms(23, 59, 59),
+        &(start.and_hms(0, 0, 0) - Duration::days(range)),
     );
     let log_events = log_events.iter().filter(|filter_event| {
         filter_tag_ids.iter().all(|filter_tag_id| {
