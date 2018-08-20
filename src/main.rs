@@ -188,6 +188,12 @@ fn main() {
                         .takes_value(true),
                 )
                 .arg(
+                    Arg::with_name("no_message")
+                        .long("no_message")
+                        .help("Removes the message for the event")
+                        .takes_value(false),
+                )
+                .arg(
                     Arg::with_name("add_tags")
                         .long("add_tags")
                         .short("a")
@@ -404,7 +410,7 @@ fn hour_string_from_i64(x: i64) -> String {
     format!("{:.1}", x as f32 / 60. / 60.).to_string()
 }
 
-/// Prints out all events on a given day.
+/// Prints out events from the database in different ways.
 fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
     let event_db = time_track::EventDB::read(path)?;
@@ -597,16 +603,33 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         event_db.events.insert(date_time.timestamp(), event);
     }
 
+    let no_message = matches.is_present("no_message");
+
     if let Some(message) = matches.value_of("message") {
+        if no_message {
+            println!("Can't use both the 'message' and 'no_message' attributes at the same time");
+            return Ok(())
+        }
+
         match event_db.get_event_mut(event_position) {
             Some(e) => {
                 e.description = message.to_string();
             }
             None => {
                 println!("Could not find an event at the given position");
-                return Ok(());
+                return Ok(())
             }
         };
+    }
+
+    if no_message {
+        match event_db.get_event_mut(event_position) {
+            Some(e) => e.description = String::new(),
+            None => {
+                println!("Could not find an event at the given position");
+                return Ok(())
+            }
+        }
     }
 
     if let Some(add_tags) = matches.value_of("add_tags") {
