@@ -22,6 +22,7 @@ use std::{
 
 const YMD_FORMAT: &str = "%Y-%m-%d";
 const HM_FORMAT: &str = "%H:%M";
+const YMDHM_FORMAT: &str = "%Y-%m-%d %H:%M";
 
 #[cfg(debug_assertions)]
 const CONFIG_FILENAME: &str = "config_debug.json";
@@ -422,62 +423,59 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
     let event_db = time_track::EventDB::read(path)?;
 
+    if matches.is_present("range") {
+        if matches.is_present("start") || matches.is_present("end") {
+            println!("Can't use both \"start\"/\"end\" and \"range\" attributes at the same time");
+            return Ok(())
+        }
+    }
+
     let range = match matches.value_of("range") {
         Some(r) => match r.parse::<i64>() {
             Ok(i) => i,
             Err(e) => {
-                println!("Could not parse \"range\": {:?}", e);
+                println!("Error when parsing \"range\" argument: {:?}", e);
                 return Ok(())
             }
         },
         None => 0,
     };
 
-    let mut start: chrono::Date<Local> = match matches.value_of("start") {
-        Some(datetime_str) => match parse_datetime(datetime_str) {
-            Ok(dt) => dt.date(),
-            Err(e) => {
-                println!("Error parsing start date: {:?}", e);
-                return Ok(())
-            }
-        },
-        None => Local::today(),
-    };
-
-    let mut end: chrono::Date<Local> = match matches.value_of("end") {
-        Some(datetime_str) => match parse_datetime(datetime_str) {
-            Ok(dt) => dt.date(),
-            Err(e) => {
-                println!("Error parsing end date: {:?}", e);
-                return Ok(())
-            }
-        },
-        None => Local::today(),
-    };
-
-    if range != 0  && end != Local::today() {
-        println!("Can't set both an end date and a range at the same time");
-        return Ok(())
-    }
-
-    if let Some(back) = matches.value_of("back") {
-        match back.parse::<i64>() {
-            Ok(d) => start = start - Duration::days(d),
+    let back = match matches.value_of("back") {
+        Some(b) => match b.parse::<i64>() {
+            Ok(d) => d,
             Err(e) => {
                 println!("Error when parsing \"back\" argument: {:?}", e);
                 return Ok(())
             }
-        }
-    }
+        },
+        None => 0,
+    };
 
-    match range {
-        0 => println!("Printing events on {}", start.format("%a %Y-%m-%d")),
-        _ => println!(
-            "Printing events from {} to {}\n",
-            (start - Duration::days(range)).format("%a %Y-%m-%d"),
-            start.format("%a %Y-%m-%d"),
-        ),
-    }
+
+    let end: chrono::DateTime<Local> = match matches.value_of("end") {
+        Some(datetime_str) => match parse_datetime(datetime_str) {
+            Ok(dt) => dt,
+            Err(e) => {
+                println!("Error parsing \"end\" argument: {:?}", e);
+                return Ok(())
+            }
+        },
+        None => (Local::today() - Duration::days(back)).and_hms(23, 59, 59),
+    };
+
+    let start: chrono::DateTime<Local> = match matches.value_of("start") {
+        Some(datetime_str) => match parse_datetime(datetime_str) {
+            Ok(dt) => dt,
+            Err(e) => {
+                println!("Error parsing \"start\" argument: {:?}", e);
+                return Ok(())
+            }
+        },
+        None => (end.date() - Duration::days(range)).and_hms(00, 00, 00),
+    };
+
+    println!("Printing events between {} and {}", start.format(YMDHM_FORMAT), end.format(YMDHM_FORMAT));
 
     fn print_table(pos: &str, duration: &str, time: &str, tags: &str, description: &str) {
         println!(
@@ -506,8 +504,8 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     print_table("Pos", "Dur", "Time", "Tags", "Description");
 
     let log_events = event_db.get_log_between_times(
-        &start.and_hms(23, 59, 59),
-        &(start.and_hms(0, 0, 0) - Duration::days(range)),
+        &start,
+        &end,
     );
     let log_events = log_events.iter().filter(|filter_event| {
         filter_tag_ids.iter().all(|filter_tag_id| {
@@ -583,7 +581,7 @@ fn parse_datetime(datetime_str: &str) -> ParseResult<DateTime<Local>> {
         dt_str => {
             let dt_str = match dt_str.len() {
                 5 => format!("{} {}", Local::today().format(YMD_FORMAT), dt_str),
-                10 => format!("{} {}", dt_str, Local::now().format(HM_FORMAT)),
+                10 => format!("{} {}", dt_str, "00:00"),
                 s => s.to_string(),
             };
 
