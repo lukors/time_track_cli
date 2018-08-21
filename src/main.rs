@@ -133,11 +133,6 @@ fn main() {
             SubCommand::with_name("log")
                 .about("Lists events on a given day")
                 .arg(
-                    Arg::with_name("range")
-                        .help("How many days into the past to list")
-                        .takes_value(true),
-                )
-                .arg(
                     Arg::with_name("start")
                         .help("What date to start from, defaults to today")
                         .short("s")
@@ -149,6 +144,11 @@ fn main() {
                         .help("What date to end at")
                         .short("e")
                         .long("end")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("range")
+                        .help("How many days into the past to list")
                         .takes_value(true),
                 )
                 .arg(
@@ -423,9 +423,9 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
     let event_db = time_track::EventDB::read(path)?;
 
-    if matches.is_present("range") {
+    if matches.is_present("range") || matches.is_present("back") {
         if matches.is_present("start") || matches.is_present("end") {
-            println!("Can't use both \"start\"/\"end\" and \"range\" attributes at the same time");
+            println!("Can't use both \"start\" or \"end\" and \"range\" or \"back\" attributes at the same time");
             return Ok(())
         }
     }
@@ -451,7 +451,6 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         },
         None => 0,
     };
-
 
     let end: chrono::DateTime<Local> = match matches.value_of("end") {
         Some(datetime_str) => match parse_datetime(datetime_str) {
