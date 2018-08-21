@@ -427,7 +427,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             Ok(i) => i,
             Err(e) => {
                 println!("Could not parse \"range\": {:?}", e);
-                return Ok(());
+                return Ok(())
             }
         },
         None => 0,
@@ -438,18 +438,34 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             Ok(dt) => dt.date(),
             Err(e) => {
                 println!("Error parsing start date: {:?}", e);
-                return Ok(());
+                return Ok(())
             }
         },
         None => Local::today(),
     };
+
+    let mut end: chrono::Date<Local> = match matches.value_of("end") {
+        Some(datetime_str) => match parse_datetime(datetime_str) {
+            Ok(dt) => dt.date(),
+            Err(e) => {
+                println!("Error parsing end date: {:?}", e);
+                return Ok(())
+            }
+        },
+        None => Local::today(),
+    };
+
+    if range != 0  && end != Local::today() {
+        println!("Can't set both an end date and a range at the same time");
+        return Ok(())
+    }
 
     if let Some(back) = matches.value_of("back") {
         match back.parse::<i64>() {
             Ok(d) => start = start - Duration::days(d),
             Err(e) => {
                 println!("Error when parsing \"back\" argument: {:?}", e);
-                return Ok(());
+                return Ok(())
             }
         }
     }
@@ -564,12 +580,13 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 fn parse_datetime(datetime_str: &str) -> ParseResult<DateTime<Local>> {
     match datetime_str {
         "now" => Ok(Local::now()),
-
         dt_str => {
-            let dt_str = match dt_str.contains(' ') {
-                true => dt_str.to_string(),
-                false => format!("{} {}", Local::today().format(YMD_FORMAT), dt_str),
+            let dt_str = match dt_str.len() {
+                5 => format!("{} {}", Local::today().format(YMD_FORMAT), dt_str),
+                10 => format!("{} {}", dt_str, Local::now().format(HM_FORMAT)),
+                s => s.to_string(),
             };
+
             Local.datetime_from_str(&dt_str, &format!("{} {}", YMD_FORMAT, HM_FORMAT))
         }
     }
