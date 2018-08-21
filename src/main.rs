@@ -133,6 +133,18 @@ fn main() {
             SubCommand::with_name("log")
                 .about("Lists events on a given day")
                 .arg(
+                    Arg::with_name("range")
+                        .help("How many days into the past to list")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("back")
+                        .help("How many days before \"date\" to start listing")
+                        .short("b")
+                        .long("back")
+                        .takes_value(true),
+                )
+                .arg(
                     Arg::with_name("start")
                         .help("What date to start from, defaults to today")
                         .short("s")
@@ -147,23 +159,17 @@ fn main() {
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("range")
-                        .help("How many days into the past to list")
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::with_name("back")
-                        .help("How many days before \"date\" to start listing")
-                        .short("b")
-                        .long("back")
-                        .takes_value(true),
-                )
-                .arg(
                     Arg::with_name("filter")
                         .help("Only log events with the given tags")
                         .short("f")
                         .long("filter")
                         .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("verbose")
+                        .help("How much information to write out")
+                        .short("v")
+                        .multiple(true),
                 ),
         )
         .subcommand(
@@ -474,7 +480,19 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         None => (end.date() - Duration::days(range)).and_hms(00, 00, 00),
     };
 
-    println!("Printing events between {} and {}", start.format(YMDHM_FORMAT), end.format(YMDHM_FORMAT));
+    let verbosity = match matches.occurrences_of("verbose") {
+        0 => 3,
+        v => v,
+    };
+
+    match verbosity {
+        1 => println!("Printing total stats for events between {} and {}",
+            start.format(YMDHM_FORMAT), end.format(YMDHM_FORMAT)),
+        2 => println!("Printing daily stats for events between {} and {}",
+            start.format(YMDHM_FORMAT), end.format(YMDHM_FORMAT)),
+        _ => println!("Printing events between {} and {}",
+            start.format(YMDHM_FORMAT), end.format(YMDHM_FORMAT)),
+    }
 
     fn print_table(pos: &str, duration: &str, time: &str, tags: &str, description: &str) {
         println!(
@@ -498,9 +516,19 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         })
         .collect();
 
+    if filter_tag_ids.len() > 0 {
+        print!("Only including events with the following tags:");
+        for tag in filter_tags {
+            print!(" {}", tag);
+        }
+        println!();
+    }
+
     let mut current_date: Option<Date<Local>> = None;
 
-    print_table("Pos", "Dur", "Time", "Tags", "Description");
+    if verbosity >= 3 {
+        print_table("Pos", "Dur", "Time", "Tags", "Description");
+    }
 
     let log_events = event_db.get_log_between_times(
         &start,
@@ -524,11 +552,15 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
         if current_date.is_none() || event_date != current_date.unwrap() {
             if current_date.is_some() {
-                print_duration_today(daily_duration);
+                if verbosity >= 2 {
+                    print_duration_today(daily_duration);
+                }
                 daily_duration = 0;
             }
 
-            println!("\n{}", event_date.format("%Y-%m-%d %a"));
+            if verbosity >= 2 {
+                println!("\n{}", event_date.format("%Y-%m-%d %a"));
+            }
             current_date = Some(event_date);
         }
 
@@ -558,16 +590,20 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             .collect::<Vec<&str>>()
             .join(" ");
 
-        print_table(
-            &log_event.position.to_string(),
-            &duration_string,
-            &time_string,
-            &tag_string,
-            &log_event.event.description,
-        );
+        if verbosity >= 3 {
+            print_table(
+                &log_event.position.to_string(),
+                &duration_string,
+                &time_string,
+                &tag_string,
+                &log_event.event.description,
+            );
+        }
     }
 
-    print_duration_today(daily_duration);
+    if verbosity >= 2 {
+        print_duration_today(daily_duration);
+    }
     println!("\nTotal duration: {}", hour_string_from_i64(total_duration));
     println!("End");
 
