@@ -22,6 +22,7 @@ use std::{
 
 const YMD_FORMAT: &str = "%Y-%m-%d";
 const HM_FORMAT: &str = "%H:%M";
+const HMS_FORMAT: &str = "%H:%M:%S";
 const YMDHM_FORMAT: &str = "%Y-%m-%d %H:%M";
 
 #[cfg(debug_assertions)]
@@ -305,7 +306,7 @@ fn main() {
 
 fn add_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let timestamp = match matches.value_of("time") {
-        Some(t) => match parse_datetime(t) {
+        Some(t) => match parse_datetime(t, &Local::today(), &Local::now().time()) {
             Ok(dt) => dt.timestamp(),
             Err(e) => {
                 println!("Error parsing date/time: {:?}", e);
@@ -459,7 +460,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     };
 
     let end: chrono::DateTime<Local> = match matches.value_of("end") {
-        Some(datetime_str) => match parse_datetime(datetime_str) {
+        Some(datetime_str) => match parse_datetime(datetime_str, &Local::today(), &NaiveTime::from_hms(23, 59, 59)) {
             Ok(dt) => dt,
             Err(e) => {
                 println!("Error parsing \"end\" argument: {:?}", e);
@@ -470,7 +471,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     };
 
     let start: chrono::DateTime<Local> = match matches.value_of("start") {
-        Some(datetime_str) => match parse_datetime(datetime_str) {
+        Some(datetime_str) => match parse_datetime(datetime_str, &Local::today(), &NaiveTime::from_hms(00, 00, 00)) {
             Ok(dt) => dt,
             Err(e) => {
                 println!("Error parsing \"start\" argument: {:?}", e);
@@ -610,17 +611,37 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     Ok(())
 }
 
-fn parse_datetime(datetime_str: &str) -> ParseResult<DateTime<Local>> {
+fn parse_datetime(datetime_str: &str, default_date: &Date<Local>, default_time: &NaiveTime) -> ParseResult<DateTime<Local>> {
     match datetime_str {
         "now" => Ok(Local::now()),
         dt_str => {
-            let dt_str = match dt_str.len() {
-                5 => format!("{} {}", Local::today().format(YMD_FORMAT), dt_str),
-                10 => format!("{} {}", dt_str, "00:00"),
-                s => s.to_string(),
-            };
 
-            Local.datetime_from_str(&dt_str, &format!("{} {}", YMD_FORMAT, HM_FORMAT))
+            Ok(match dt_str.len() {
+                5 => {
+                    let time = match NaiveTime::parse_from_str(&format!("{}:00", dt_str), HMS_FORMAT) {
+                        Ok(r) => r,
+                        Err(e) => return Err(e),
+                    };
+                    default_date.and_hms(time.hour(), time.minute(), time.second())
+                }
+
+                10 => {
+                    let date = match NaiveDate::parse_from_str(&format!("{}", dt_str), YMD_FORMAT) {
+                        Ok(r) => r,
+                        Err(e) => return Err(e),
+                    };
+                    let naive_date_time = date.and_hms(default_time.hour(), default_time.minute(), default_time.second());
+                    Local.from_local_datetime(&naive_date_time).unwrap()
+                }
+
+                _ => {
+                    match Local.datetime_from_str(&dt_str, YMDHM_FORMAT) {
+                        Ok(r) => r,
+                        Err(e) => return Err(e),
+                    }
+                }
+            })
+
         }
     }
 }
@@ -635,26 +656,35 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             Ok(p) => p as usize,
             _ => {
                 println!("Could not parse position value");
-                return Ok(());
+                return Ok(())
             }
         };
     }
     let event_position = event_position;
 
     if let Some(date_time_str) = matches.value_of("time") {
-        let date_time = match parse_datetime(date_time_str) {
+        let event = match event_db.get_log_from_pos(event_position) {
+            Some(r) => r,
+            None => {
+                println!("Couldn't find an event at the given position: {}", event_position);
+                return Ok(())
+            }
+        };
+        let event_time = Local.timestamp(event.timestamp, 0);
+
+        let date_time = match parse_datetime(date_time_str, &event_time.date(), &event_time.time()) {
             Ok(dt) => dt,
             Err(e) => {
                 println!("Error parsing date/time: {:?}", e);
-                return Ok(());
+                return Ok(())
             }
         };
 
         let event = match event_db.remove_event(event_position) {
             Some(e) => e,
             None => {
-                println!("Could not find an event at the given position");
-                return Ok(());
+                println!("Could not find an event at the given position: {}", event_position);
+                return Ok(())
             }
         };
         event_db.events.insert(date_time.timestamp(), event);
