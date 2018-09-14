@@ -321,15 +321,12 @@ fn add_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let tags: Vec<_> = tags.split_whitespace().collect();
 
     let path = Path::new(&config.database_path);
-    let mut event_db = time_track::EventDB::read(path)?;
+    let mut event_db = time_track::EventDb::read(path)?;
     event_db.add_event(timestamp, description, &tags).unwrap();
     event_db.write(path)?;
 
-    let duration_str = hour_string_from_i64(
-        event_db
-            .get_event_duration(timestamp)
-            .expect("Could not retrieve event from database after storing it"),
-    );
+    let duration_str = hour_string_from_i64( event_db.get_event_duration(timestamp).unwrap_or(0) );
+
     let format_str = format!("{} {}", YMD_FORMAT, HM_FORMAT);
     let time_str = Local.timestamp(timestamp, 0).format(&format_str);
     println!(
@@ -342,7 +339,7 @@ fn add_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
 fn remove_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
-    let mut event_db = time_track::EventDB::read(path)?;
+    let mut event_db = time_track::EventDb::read(path)?;
 
     let mut event_position = 0;
     if let Some(position) = matches.value_of("position") {
@@ -369,7 +366,7 @@ fn remove_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
 fn print_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
-    let event_db = time_track::EventDB::read(path)?;
+    let event_db = time_track::EventDb::read(path)?;
 
     let position = match matches.value_of("position") {
         Some(p) => match p.parse::<usize>() {
@@ -428,7 +425,7 @@ fn hour_string_from_i64(x: i64) -> String {
 /// Prints out events from the database in different ways.
 fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
-    let event_db = time_track::EventDB::read(path)?;
+    let event_db = time_track::EventDb::read(path)?;
 
     if matches.is_present("range") || matches.is_present("back") {
         if matches.is_present("start") || matches.is_present("end") {
@@ -648,7 +645,7 @@ fn parse_datetime(datetime_str: &str, default_date: &Date<Local>, default_time: 
 
 fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
-    let mut event_db = time_track::EventDB::read(path)?;
+    let mut event_db = time_track::EventDb::read(path)?;
 
     let mut event_position = 0;
     if let Some(position) = matches.value_of("position") {
@@ -750,7 +747,7 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
 fn list_tags(config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
-    let event_db = time_track::EventDB::read(path)?;
+    let event_db = time_track::EventDb::read(path)?;
 
     println!("Tags:");
     for (id, tag) in event_db.tags_iter() {
@@ -762,7 +759,7 @@ fn list_tags(config: &Config) -> io::Result<()> {
 
 fn add_tag(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
-    let mut event_db = time_track::EventDB::read(path)?;
+    let mut event_db = time_track::EventDb::read(path)?;
 
     // I can unwrap these because these arguments are required in Clap.
     let long_name = matches.value_of("long").unwrap();
@@ -776,7 +773,7 @@ fn add_tag(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
 fn remove_tag(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
-    let mut event_db = time_track::EventDB::read(path)?;
+    let mut event_db = time_track::EventDb::read(path)?;
 
     if let Some(short_name) = matches.value_of("short") {
         event_db.remove_tag(short_name.to_string()).unwrap();
