@@ -1,5 +1,4 @@
 
 /target
 **/*.rs.bk
-*.sublime-project
-*.sublime-workspace
+test_db.json
