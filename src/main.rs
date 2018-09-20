@@ -307,7 +307,7 @@ fn main() {
 
 fn add_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let timestamp = match matches.value_of("time") {
-        Some(t) => match parse_datetime(t, &Local::today(), &Local::now().time()) {
+        Some(t) => match parse_datetime(t, Local::today(), Local::now().time()) {
             Ok(dt) => dt.timestamp(),
             Err(e) => {
                 println!("Error parsing date/time: {:?}", e);
@@ -396,7 +396,7 @@ fn print_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         .event
         .tag_ids
         .iter()
-        .map(|i| &*event_db.tags.get(i).unwrap().short_name)
+        .map(|i| &*event_db.tags[i].short_name)
         .collect::<Vec<&str>>()
         .join(", ");
 
@@ -427,11 +427,10 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
     let event_db = time_track::EventDb::read(path)?;
 
-    if matches.is_present("range") || matches.is_present("back") {
-        if matches.is_present("start") || matches.is_present("end") {
-            println!("Can't use both \"start\" or \"end\" and \"range\" or \"back\" attributes at the same time");
-            return Ok(())
-        }
+    if matches.is_present("range") || matches.is_present("back")
+       && matches.is_present("start") || matches.is_present("end") {
+        println!("Can't use both \"start\" or \"end\" and \"range\" or \"back\" attributes at the same time");
+        return Ok(())
     }
 
     let range = match matches.value_of("range") {
@@ -457,7 +456,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     };
 
     let end: chrono::DateTime<Local> = match matches.value_of("end") {
-        Some(datetime_str) => match parse_datetime(datetime_str, &Local::today(), &NaiveTime::from_hms(23, 59, 59)) {
+        Some(datetime_str) => match parse_datetime(datetime_str, Local::today(), NaiveTime::from_hms(23, 59, 59)) {
             Ok(dt) => dt,
             Err(e) => {
                 println!("Error parsing \"end\" argument: {:?}", e);
@@ -468,7 +467,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     };
 
     let start: chrono::DateTime<Local> = match matches.value_of("start") {
-        Some(datetime_str) => match parse_datetime(datetime_str, &Local::today(), &NaiveTime::from_hms(00, 00, 00)) {
+        Some(datetime_str) => match parse_datetime(datetime_str, Local::today(), NaiveTime::from_hms(00, 00, 00)) {
             Ok(dt) => dt,
             Err(e) => {
                 println!("Error parsing \"start\" argument: {:?}", e);
@@ -514,7 +513,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         })
         .collect();
 
-    if filter_tag_ids.len() > 0 {
+    if !filter_tag_ids.is_empty() {
         print!("Only including events with the following tags:");
         for tag in filter_tags {
             print!(" {}", tag);
@@ -584,7 +583,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             .event
             .tag_ids
             .iter()
-            .map(|i| &*event_db.tags.get(i).unwrap().short_name)
+            .map(|i| &*event_db.tags[i].short_name)
             .collect::<Vec<&str>>()
             .join(" ");
 
@@ -608,7 +607,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     Ok(())
 }
 
-fn parse_datetime(datetime_str: &str, default_date: &Date<Local>, default_time: &NaiveTime) -> ParseResult<DateTime<Local>> {
+fn parse_datetime(datetime_str: &str, default_date: Date<Local>, default_time: NaiveTime) -> ParseResult<DateTime<Local>> {
     match datetime_str {
         "now" => Ok(Local::now()),
         dt_str => {
@@ -623,7 +622,7 @@ fn parse_datetime(datetime_str: &str, default_date: &Date<Local>, default_time: 
                 }
 
                 10 => {
-                    let date = match NaiveDate::parse_from_str(&format!("{}", dt_str), YMD_FORMAT) {
+                    let date = match NaiveDate::parse_from_str(dt_str, YMD_FORMAT) {
                         Ok(r) => r,
                         Err(e) => return Err(e),
                     };
@@ -669,7 +668,7 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
     if let Some(date_time_str) = matches.value_of("time") {
         let event_time = Local.timestamp(event_id.to_timestamp(&event_db).unwrap(), 0);
-        let date_time = parse_datetime(date_time_str, &event_time.date(), &event_time.time()).unwrap();
+        let date_time = parse_datetime(date_time_str, event_time.date(), event_time.time()).unwrap();
         let event = event_db.remove_event(&event_id).unwrap();
         event_db.events.insert(date_time.timestamp(), event);
     }
