@@ -19,6 +19,7 @@ use std::{
     io,
     path::Path,
 };
+use time_track::EventId;
 
 const YMD_FORMAT: &str = "%Y-%m-%d";
 const HM_FORMAT: &str = "%H:%M";
@@ -325,7 +326,7 @@ fn add_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     event_db.add_event(timestamp, description, &tags).unwrap();
     event_db.write(path)?;
 
-    let duration_str = hour_string_from_i64( event_db.get_event_duration(timestamp).unwrap_or(0) );
+    let duration_str = hour_string_from_i64( event_db.get_event_duration(&EventId::Timestamp(timestamp)).unwrap_or(0) );
 
     let format_str = format!("{} {}", YMD_FORMAT, HM_FORMAT);
     let time_str = Local.timestamp(timestamp, 0).format(&format_str);
@@ -341,19 +342,18 @@ fn remove_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
     let mut event_db = time_track::EventDb::read(path)?;
 
-    let mut event_position = 0;
-    if let Some(position) = matches.value_of("position") {
-        event_position = match position.parse::<i64>() {
-            Ok(p) => p as usize,
+    let event_id = match matches.value_of("position") {
+        Some(position) => match position.parse::<usize>() {
+            Ok(p) => EventId::Position(p),
             _ => {
                 println!("Could not parse position value");
                 return Ok(());
             }
-        };
-    }
-    let event_position = event_position;
+        }
+        None => EventId::Position(0),
+    };
 
-    match event_db.remove_event(event_position) {
+    match event_db.remove_event(&event_id) {
         Some(e) => {
             event_db.write(&path)?;
             println!("Removed {:?}", e);
@@ -382,7 +382,7 @@ fn print_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         }
     };
 
-    let log_event = match event_db.get_log_from_pos(position) {
+    let log_event = match event_db.get_log(&EventId::Position(position)) {
         Some(e) => e,
         None => {
             println!("Could not find an event at the given position");
@@ -647,43 +647,30 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
     let mut event_db = time_track::EventDb::read(path)?;
 
-    let mut event_position = 0;
-    if let Some(position) = matches.value_of("position") {
-        event_position = match position.parse::<i64>() {
-            Ok(p) => p as usize,
+    let event_id = match matches.value_of("position") {
+        Some(position) => match position.parse::<usize>() {
+            Ok(p) => EventId::Position(p),
             _ => {
                 println!("Could not parse position value");
                 return Ok(())
             }
-        };
+        },
+        None => EventId::Position(0),
+    };
+
+    // By checking if the event_id exists in the databse here we can safely use `unwrap()`
+    // in the rest of the code with little risk of triggering a panic.
+    if !event_id.exists(&event_db) {
+        println!("Couldn't find an event at the given position");
+        return Ok(())
     }
-    let event_position = event_position;
+
+    let original_event = event_db.get_event(&event_id).unwrap().clone();
 
     if let Some(date_time_str) = matches.value_of("time") {
-        let event = match event_db.get_log_from_pos(event_position) {
-            Some(r) => r,
-            None => {
-                println!("Couldn't find an event at the given position: {}", event_position);
-                return Ok(())
-            }
-        };
-        let event_time = Local.timestamp(event.timestamp, 0);
-
-        let date_time = match parse_datetime(date_time_str, &event_time.date(), &event_time.time()) {
-            Ok(dt) => dt,
-            Err(e) => {
-                println!("Error parsing date/time: {:?}", e);
-                return Ok(())
-            }
-        };
-
-        let event = match event_db.remove_event(event_position) {
-            Some(e) => e,
-            None => {
-                println!("Could not find an event at the given position: {}", event_position);
-                return Ok(())
-            }
-        };
+        let event_time = Local.timestamp(event_id.to_timestamp(&event_db).unwrap(), 0);
+        let date_time = parse_datetime(date_time_str, &event_time.date(), &event_time.time()).unwrap();
+        let event = event_db.remove_event(&event_id).unwrap();
         event_db.events.insert(date_time.timestamp(), event);
     }
 
@@ -695,31 +682,17 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             return Ok(())
         }
 
-        match event_db.get_event_mut(event_position) {
-            Some(e) => {
-                e.description = message.to_string();
-            }
-            None => {
-                println!("Could not find an event at the given position");
-                return Ok(())
-            }
-        };
+        event_db.get_event_mut(&event_id).unwrap().description = message.to_string();
     }
 
     if no_message {
-        match event_db.get_event_mut(event_position) {
-            Some(e) => e.description = String::new(),
-            None => {
-                println!("Could not find an event at the given position");
-                return Ok(())
-            }
-        }
+        event_db.get_event_mut(&event_id).unwrap().description = String::new();
     }
 
     if let Some(add_tags) = matches.value_of("add_tags") {
         let short_names: Vec<&str> = add_tags.split_whitespace().collect();
 
-        match event_db.add_tags_for_event(event_position, &short_names) {
+        match event_db.add_tags_for_event(&event_id, &short_names) {
             Ok(_) => (),
             Err(e) => {
                 println!("{}", e);
@@ -731,7 +704,7 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     if let Some(rm_tags) = matches.value_of("rm_tags") {
         let short_names: Vec<&str> = rm_tags.split_whitespace().collect();
 
-        match event_db.remove_tags_for_event(event_position, &short_names) {
+        match event_db.remove_tags_for_event(&event_id, &short_names) {
             Ok(_) => (),
             Err(e) => {
                 println!("{}", e);
@@ -740,8 +713,12 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         }
     }
 
+    let edited_event = event_db.get_event(&event_id);
+
     event_db.write(path)?;
     println!("Sucessfully edited the event");
+    println!("Original: {:?}", original_event);
+    println!("  Edited:   {:?}", edited_event);
     Ok(())
 }
 
@@ -776,7 +753,7 @@ fn remove_tag(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let mut event_db = time_track::EventDb::read(path)?;
 
     if let Some(short_name) = matches.value_of("short") {
-        event_db.remove_tag(short_name.to_string()).unwrap();
+        event_db.remove_tag(short_name).unwrap();
         event_db.write(path)?;
     }
 
