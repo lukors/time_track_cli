@@ -1,6 +1,6 @@
 [package]
 name = "time_track_cli"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Lukas Orsvärn <lukas@orsvarn.com>"]
 
 [dependencies]
