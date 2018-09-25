@@ -427,8 +427,8 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
     let event_db = time_track::EventDb::read(path)?;
 
-    if matches.is_present("range") || matches.is_present("back")
-       && matches.is_present("start") || matches.is_present("end") {
+    if (matches.is_present("range") || matches.is_present("back"))
+       && (matches.is_present("start") || matches.is_present("end")) {
         println!("Can't use both \"start\" or \"end\" and \"range\" or \"back\" attributes at the same time");
         return Ok(())
     }
