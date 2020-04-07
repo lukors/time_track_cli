@@ -1,3 +1,8 @@
+// TODO: Update to latest Rust version.
+// TODO: Write tests for all functions.
+// TODO: Write integration tests.
+// TODO: Write custom `Result` and use it in all code.
+
 #[macro_use]
 extern crate serde_derive;
 extern crate serde;
@@ -21,9 +26,9 @@ use std::{
 };
 use time_track::EventId;
 
-const YMD_FORMAT: &str = "%Y-%m-%d";
 const HM_FORMAT: &str = "%H:%M";
 const HMS_FORMAT: &str = "%H:%M:%S";
+const YMD_FORMAT: &str = "%Y-%m-%d";
 const YMDHM_FORMAT: &str = "%Y-%m-%d %H:%M";
 
 #[cfg(debug_assertions)]
@@ -108,7 +113,7 @@ fn main() {
                     Arg::with_name("time")
                         .long("time")
                         .short("t")
-                        .help("The time to put the event at")
+                        .help("The time and/or day to put the event at, the format is hh:mm or 'YYYY-MM-DD hh:mm'")
                         .takes_value(true),
                 ),
         )
@@ -186,14 +191,7 @@ fn main() {
                     Arg::with_name("time")
                         .long("time")
                         .short("t")
-                        .help("The new time for the event")
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::with_name("day")
-                        .long("day")
-                        .short("d")
-                        .help("The new day for the event")
+                        .help("The new time and/or day for the event, the format is hh:mm or 'YYYY-MM-DD hh:mm'")
                         .takes_value(true),
                 )
                 .arg(
@@ -204,21 +202,21 @@ fn main() {
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("no_message")
-                        .long("no_message")
+                    Arg::with_name("no-message")
+                        .long("no-message")
                         .help("Removes the message for the event")
                         .takes_value(false),
                 )
                 .arg(
-                    Arg::with_name("add_tags")
-                        .long("add_tags")
+                    Arg::with_name("add-tags")
+                        .long("add-tags")
                         .short("a")
                         .help("Tags that should be added to the event")
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("rm_tags")
-                        .long("rm_tags")
+                    Arg::with_name("rm-tags")
+                        .long("rm-tags")
                         .short("r")
                         .help("Tags that should be removed from the event")
                         .takes_value(true),
@@ -229,7 +227,7 @@ fn main() {
                 .about("Lists all available tags")
         )
         .subcommand(
-            SubCommand::with_name("add_tag")
+            SubCommand::with_name("add-tag")
                 .about("Adds a tag to the database")
                 .arg(
                     Arg::with_name("short")
@@ -249,7 +247,7 @@ fn main() {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("remove_tag")
+            SubCommand::with_name("rm-tag")
                 .about("Removes a tag from the database")
                 .arg(
                     Arg::with_name("short")
@@ -294,10 +292,10 @@ fn main() {
     if let Some(_matches) = matches.subcommand_matches("tags") {
         list_tags(&cfg).unwrap();
     }
-    if let Some(matches) = matches.subcommand_matches("add_tag") {
+    if let Some(matches) = matches.subcommand_matches("add-tag") {
         add_tag(matches, &cfg).unwrap();
     }
-    if let Some(matches) = matches.subcommand_matches("remove_tag") {
+    if let Some(matches) = matches.subcommand_matches("rm-tag") {
         remove_tag(matches, &cfg).unwrap();
     }
     if let Some(matches) = matches.subcommand_matches("config") {
@@ -673,11 +671,11 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         event_db.events.insert(date_time.timestamp(), event);
     }
 
-    let no_message = matches.is_present("no_message");
+    let no_message = matches.is_present("no-message");
 
     if let Some(message) = matches.value_of("message") {
         if no_message {
-            println!("Can't use both the 'message' and 'no_message' attributes at the same time");
+            println!("Can't use both the 'message' and 'no-message' attributes at the same time");
             return Ok(())
         }
 
@@ -688,7 +686,7 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         event_db.get_event_mut(&event_id).unwrap().description = String::new();
     }
 
-    if let Some(add_tags) = matches.value_of("add_tags") {
+    if let Some(add_tags) = matches.value_of("add-tags") {
         let short_names: Vec<&str> = add_tags.split_whitespace().collect();
 
         match event_db.add_tags_for_event(&event_id, &short_names) {
@@ -700,7 +698,7 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         }
     }
 
-    if let Some(rm_tags) = matches.value_of("rm_tags") {
+    if let Some(rm_tags) = matches.value_of("rm-tags") {
         let short_names: Vec<&str> = rm_tags.split_whitespace().collect();
 
         match event_db.remove_tags_for_event(&event_id, &short_names) {
