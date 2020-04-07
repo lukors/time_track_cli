@@ -1,4 +1,5 @@
 // TODO: Update to latest Rust version.
+// TODO: Automatically take version number from cargo file?
 // TODO: Write tests for all functions.
 // TODO: Write integration tests.
 // TODO: Write custom `Result` and use it in all code.
@@ -93,7 +94,7 @@ impl Config {
 
 fn main() {
     let matches = App::new("Time Track CLI")
-        .version("0.1.0")
+        .version("0.1.3")
         .about("Track your time")
         .author("Lukas Orsvärn")
         .subcommand(
