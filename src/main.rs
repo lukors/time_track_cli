@@ -1,9 +1,6 @@
-// TODO: Update to latest Rust version.
-// TODO: Automatically take version number from cargo file?
 // TODO: Write tests for all functions.
 // TODO: Write integration tests.
 // TODO: Write custom `Result` and use it in all code.
-
 #[macro_use]
 extern crate serde_derive;
 extern crate serde;
@@ -26,6 +23,8 @@ use std::{
     path::Path,
 };
 use time_track::EventId;
+
+const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 const HM_FORMAT: &str = "%H:%M";
 const HMS_FORMAT: &str = "%H:%M:%S";
@@ -93,8 +92,8 @@ impl Config {
 }
 
 fn main() {
-    let matches = App::new("Time Track CLI")
-        .version("0.1.3")
+    let matches = App::new("TimeTrack CLI")
+        .version(VERSION)
         .about("Track your time")
         .author("Lukas Orsvärn")
         .subcommand(
