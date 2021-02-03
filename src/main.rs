@@ -324,7 +324,11 @@ fn add_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     event_db.add_event(timestamp, description, &tags).unwrap();
     event_db.write(path)?;
 
-    let duration_str = hour_string_from_i64( event_db.get_event_duration(&EventId::Timestamp(timestamp)).unwrap_or(0) );
+    let duration_str = hour_string_from_i64(
+        event_db
+            .get_event_duration(&EventId::Timestamp(timestamp))
+            .unwrap_or(0),
+    );
 
     let format_str = format!("{} {}", YMD_FORMAT, HM_FORMAT);
     let time_str = Local.timestamp(timestamp, 0).format(&format_str);
@@ -347,7 +351,7 @@ fn remove_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
                 println!("Could not parse position value");
                 return Ok(());
             }
-        }
+        },
         None => EventId::Position(0),
     };
 
@@ -426,9 +430,10 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let event_db = time_track::EventDb::read(path)?;
 
     if (matches.is_present("range") || matches.is_present("back"))
-       && (matches.is_present("start") || matches.is_present("end")) {
+        && (matches.is_present("start") || matches.is_present("end"))
+    {
         println!("Can't use both \"start\" or \"end\" and \"range\" or \"back\" attributes at the same time");
-        return Ok(())
+        return Ok(());
     }
 
     let range = match matches.value_of("range") {
@@ -436,7 +441,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             Ok(i) => i,
             Err(e) => {
                 println!("Error when parsing \"range\" argument: {:?}", e);
-                return Ok(())
+                return Ok(());
             }
         },
         None => 0,
@@ -447,29 +452,37 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             Ok(d) => d,
             Err(e) => {
                 println!("Error when parsing \"back\" argument: {:?}", e);
-                return Ok(())
+                return Ok(());
             }
         },
         None => 0,
     };
 
     let end: chrono::DateTime<Local> = match matches.value_of("end") {
-        Some(datetime_str) => match parse_datetime(datetime_str, Local::today(), NaiveTime::from_hms(23, 59, 59)) {
+        Some(datetime_str) => match parse_datetime(
+            datetime_str,
+            Local::today(),
+            NaiveTime::from_hms(23, 59, 59),
+        ) {
             Ok(dt) => dt,
             Err(e) => {
                 println!("Error parsing \"end\" argument: {:?}", e);
-                return Ok(())
+                return Ok(());
             }
         },
         None => (Local::today() - Duration::days(back)).and_hms(23, 59, 59),
     };
 
     let start: chrono::DateTime<Local> = match matches.value_of("start") {
-        Some(datetime_str) => match parse_datetime(datetime_str, Local::today(), NaiveTime::from_hms(00, 00, 00)) {
+        Some(datetime_str) => match parse_datetime(
+            datetime_str,
+            Local::today(),
+            NaiveTime::from_hms(00, 00, 00),
+        ) {
             Ok(dt) => dt,
             Err(e) => {
                 println!("Error parsing \"start\" argument: {:?}", e);
-                return Ok(())
+                return Ok(());
             }
         },
         None => (end.date() - Duration::days(range)).and_hms(00, 00, 00),
@@ -481,12 +494,21 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     };
 
     match verbosity {
-        1 => println!("Printing total stats for events between {} and {}",
-            start.format(YMDHM_FORMAT), end.format(YMDHM_FORMAT)),
-        2 => println!("Printing daily stats for events between {} and {}",
-            start.format(YMDHM_FORMAT), end.format(YMDHM_FORMAT)),
-        _ => println!("Printing events between {} and {}",
-            start.format(YMDHM_FORMAT), end.format(YMDHM_FORMAT)),
+        1 => println!(
+            "Printing total stats for events between {} and {}",
+            start.format(YMDHM_FORMAT),
+            end.format(YMDHM_FORMAT)
+        ),
+        2 => println!(
+            "Printing daily stats for events between {} and {}",
+            start.format(YMDHM_FORMAT),
+            end.format(YMDHM_FORMAT)
+        ),
+        _ => println!(
+            "Printing events between {} and {}",
+            start.format(YMDHM_FORMAT),
+            end.format(YMDHM_FORMAT)
+        ),
     }
 
     fn print_table(pos: &str, duration: &str, time: &str, tags: &str, description: &str) {
@@ -525,10 +547,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         print_table("Pos", "Dur", "Time", "Tags", "Description");
     }
 
-    let log_events = event_db.get_log_between_times(
-        &start,
-        &end,
-    );
+    let log_events = event_db.get_log_between_times(&start, &end);
     let log_events = log_events.iter().filter(|filter_event| {
         filter_tag_ids.iter().all(|filter_tag_id| {
             filter_event
@@ -605,38 +624,40 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     Ok(())
 }
 
-fn parse_datetime(datetime_str: &str, default_date: Date<Local>, default_time: NaiveTime) -> ParseResult<DateTime<Local>> {
+fn parse_datetime(
+    datetime_str: &str,
+    default_date: Date<Local>,
+    default_time: NaiveTime,
+) -> ParseResult<DateTime<Local>> {
     match datetime_str {
         "now" => Ok(Local::now()),
-        dt_str => {
+        dt_str => Ok(match dt_str.len() {
+            5 => {
+                let time = match NaiveTime::parse_from_str(&format!("{}:00", dt_str), HMS_FORMAT) {
+                    Ok(r) => r,
+                    Err(e) => return Err(e),
+                };
+                default_date.and_hms(time.hour(), time.minute(), time.second())
+            }
 
-            Ok(match dt_str.len() {
-                5 => {
-                    let time = match NaiveTime::parse_from_str(&format!("{}:00", dt_str), HMS_FORMAT) {
-                        Ok(r) => r,
-                        Err(e) => return Err(e),
-                    };
-                    default_date.and_hms(time.hour(), time.minute(), time.second())
-                }
+            10 => {
+                let date = match NaiveDate::parse_from_str(dt_str, YMD_FORMAT) {
+                    Ok(r) => r,
+                    Err(e) => return Err(e),
+                };
+                let naive_date_time = date.and_hms(
+                    default_time.hour(),
+                    default_time.minute(),
+                    default_time.second(),
+                );
+                Local.from_local_datetime(&naive_date_time).unwrap()
+            }
 
-                10 => {
-                    let date = match NaiveDate::parse_from_str(dt_str, YMD_FORMAT) {
-                        Ok(r) => r,
-                        Err(e) => return Err(e),
-                    };
-                    let naive_date_time = date.and_hms(default_time.hour(), default_time.minute(), default_time.second());
-                    Local.from_local_datetime(&naive_date_time).unwrap()
-                }
-
-                _ => {
-                    match Local.datetime_from_str(&dt_str, YMDHM_FORMAT) {
-                        Ok(r) => r,
-                        Err(e) => return Err(e),
-                    }
-                }
-            })
-
-        }
+            _ => match Local.datetime_from_str(&dt_str, YMDHM_FORMAT) {
+                Ok(r) => r,
+                Err(e) => return Err(e),
+            },
+        }),
     }
 }
 
@@ -649,7 +670,7 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             Ok(p) => EventId::Position(p),
             _ => {
                 println!("Could not parse position value");
-                return Ok(())
+                return Ok(());
             }
         },
         None => EventId::Position(0),
@@ -659,14 +680,15 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     // in the rest of the code with little risk of triggering a panic.
     if !event_id.exists(&event_db) {
         println!("Couldn't find an event at the given position");
-        return Ok(())
+        return Ok(());
     }
 
     let original_event = event_db.get_event(&event_id).unwrap().clone();
 
     if let Some(date_time_str) = matches.value_of("time") {
         let event_time = Local.timestamp(event_id.to_timestamp(&event_db).unwrap(), 0);
-        let date_time = parse_datetime(date_time_str, event_time.date(), event_time.time()).unwrap();
+        let date_time =
+            parse_datetime(date_time_str, event_time.date(), event_time.time()).unwrap();
         let event = event_db.remove_event(&event_id).unwrap();
         event_db.events.insert(date_time.timestamp(), event);
     }
@@ -676,7 +698,7 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     if let Some(message) = matches.value_of("message") {
         if no_message {
             println!("Can't use both the 'message' and 'no-message' attributes at the same time");
-            return Ok(())
+            return Ok(());
         }
 
         event_db.get_event_mut(&event_id).unwrap().description = message.to_string();
