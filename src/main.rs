@@ -1,15 +1,6 @@
 // TODO: Write tests for all functions.
 // TODO: Write integration tests.
 // TODO: Write custom `Result` and use it in all code.
-#[macro_use]
-extern crate serde_derive;
-extern crate serde;
-extern crate serde_json;
-
-extern crate chrono;
-extern crate clap;
-extern crate directories;
-extern crate time_track;
 
 use chrono::{
     ParseResult,
@@ -17,6 +8,7 @@ use chrono::{
 };
 use clap::{App, Arg, SubCommand};
 use directories::ProjectDirs;
+use serde::{Serialize, Deserialize};
 use std::{
     fs::{self, File},
     io,
