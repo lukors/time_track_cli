@@ -481,6 +481,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         v => v,
     };
 
+    // Can the `start.format` and `end.format` calls here be de-duplicated?
     match verbosity {
         1 => println!(
             "Printing total stats for events between {} and {}",
