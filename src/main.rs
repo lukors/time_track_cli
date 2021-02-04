@@ -1,7 +1,3 @@
-// TODO: Write tests for all functions.
-// TODO: Write integration tests.
-// TODO: Write custom `Result` and use it in all code.
-
 use chrono::{
     ParseResult,
     {prelude::*, Duration},
