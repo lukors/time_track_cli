@@ -24,7 +24,7 @@ use std::{
 };
 use time_track::EventId;
 
-const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const HM_FORMAT: &str = "%H:%M";
 const HMS_FORMAT: &str = "%H:%M:%S";
@@ -411,7 +411,7 @@ fn print_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         println!("{:>15.15}: {}", key, value);
     }
 
-    print_key_value("Time", &time.to_string());
+    print_key_value("Time", &time);
     print_key_value("Duration", &duration);
     print_key_value("Description", &log_event.event.description);
     print_key_value("Tags", &tags);
@@ -421,7 +421,7 @@ fn print_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 }
 
 fn hour_string_from_i64(x: i64) -> String {
-    format!("{:.1}", x as f32 / 60. / 60.).to_string()
+    format!("{:.1}", x as f32 / 60. / 60.)
 }
 
 /// Prints out events from the database in different ways.
