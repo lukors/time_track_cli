@@ -4,14 +4,17 @@ use chrono::{
 };
 use clap::{App, Arg, SubCommand};
 use directories::ProjectDirs;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::{
+    cmp::max,
     fs::{self, File},
     io,
     path::Path,
 };
+use terminal_size::{terminal_size, Height, Width};
 use time_track::EventId;
 
+const DEFAULT_TERMINAL_WIDTH: usize = 100;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const HM_FORMAT: &str = "%H:%M";
@@ -501,10 +504,27 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     }
 
     fn print_table(pos: &str, duration: &str, time: &str, tags: &str, description: &str) {
-        println!(
-            "{:<6.6}|{:<5.5}|{:<6.6}|{:<16.16}|{:<76.76}",
-            pos, duration, time, tags, description
+        let terminal_width: usize = match terminal_size() {
+            Some((Width(w), Height(_))) => w.into(),
+            None => DEFAULT_TERMINAL_WIDTH,
+        };
+
+        let head = format!(
+            "{:<6.6}|{:<5.5}|{:<6.6}|{:<16.16}|",
+            pos, duration, time, tags
         );
+
+        let tail_length: usize =
+            max(terminal_width as i16 - head.chars().count() as i16 - 1, 4) as usize;
+
+        let output = format!(
+            "{}{:<width$.width$}",
+            head,
+            description,
+            width = tail_length
+        );
+
+        println!("{}", output.trim());
     }
 
     fn print_duration_today(d: i64) {
