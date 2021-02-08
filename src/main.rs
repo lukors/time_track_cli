@@ -755,7 +755,7 @@ fn list_tags(config: &Config) -> io::Result<()> {
     let event_db = time_track::EventDb::read(path)?;
 
     println!("Tags:");
-    for (id, tag) in event_db.tags_iter() {
+    for (id, tag) in event_db.tags.iter() {
         println!("{}: {} - {}", id, tag.short_name, tag.long_name);
     }
 
