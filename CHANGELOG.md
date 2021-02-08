@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2021-02-08
+### Changed
+- The order of tags in the database now stays the same
+
+### Fixed
+- log command now tries to adjusts to terminal width.
+
 ## [0.1.4] - 2021-02-03
 ### Fixed
 - Crash when adding an event to an empty database.
