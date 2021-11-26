@@ -216,6 +216,7 @@ dependencies = [
 [[package]]
 name = "time_track"
 version = "0.3.0"
+source = "git+https://github.com/lukors/time_track?tag=v0.3.0#379e04ef10e01b064ce976b8d13da1de1f1fce0c"
 dependencies = [
  "chrono",
  "serde",

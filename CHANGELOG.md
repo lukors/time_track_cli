@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2021-11-26
+### Changed
+- Renamed "event" to "checkpoint"
+- Renamed "tag" to "project"
+- Each checkpoint can only have one project attached
+- Other small fixes and tweaks
+
 ## [0.2.0] - 2021-02-08
 ### Changed
 - The order of tags in the database now stays the same
