@@ -304,11 +304,19 @@ fn add_checkpoint(matches: &clap::ArgMatches, config: &Config) -> io::Result<()>
 
     let message = matches.value_of("message").unwrap_or("");
     let project = matches.value_of("project").unwrap_or("");
+    let mut long_name = String::new();
+    let mut no_id = false;
 
     let path = Path::new(&config.database_path);
     let mut checkpoint_db = time_track::CheckpointDb::read(path)?;
 
     if let Some(project_id) = checkpoint_db.project_id_from_short_name(project) {
+        if let ProjectId::NoId = project_id {
+            no_id = true;
+        } else if let Some(project) = checkpoint_db.project_from_project_id(project_id) {
+            long_name = project.long_name.clone();
+        }
+
         checkpoint_db
             .add_checkpoint(timestamp, message, project_id)
             .unwrap();
@@ -329,10 +337,28 @@ fn add_checkpoint(matches: &clap::ArgMatches, config: &Config) -> io::Result<()>
 
     let format_str = format!("{} {}", YMD_FORMAT, HM_FORMAT);
     let time_str = Local.timestamp(timestamp, 0).format(&format_str);
-    println!(
-        "Added checkpoint: {} ({}h): {} {:?}",
-        time_str, duration_str, message, &project
-    );
+    let message = if message.is_empty() {
+        "No message".to_string()
+    } else {
+        format!("'{}'", message)
+    };
+
+    if no_id {
+        println!(
+            "Added empty checkpoint at '{time}' ({duration}h): {message}",
+            time = time_str,
+            duration = duration_str,
+            message = message,
+        );
+    } else {
+        println!(
+            "Added checkpoint for '{long}' at '{time}' ({duration}h): {message}",
+            time = time_str,
+            duration = duration_str,
+            message = message,
+            long = long_name
+        );
+    }
 
     Ok(())
 }
