@@ -772,7 +772,7 @@ fn edit_checkpoint(matches: &clap::ArgMatches, config: &Config) -> io::Result<()
     }
 
     // Project
-    let no_project = matches.is_present("no_project");
+    let no_project = matches.is_present("no-project");
     if matches.is_present("project") && no_project {
         println!("Can't use both `project` and `no-project` flags");
         return Ok(());
