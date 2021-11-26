@@ -12,7 +12,7 @@ use std::{
     path::Path,
 };
 use terminal_size::{terminal_size, Height, Width};
-use time_track::{EventId, TagId};
+use time_track::{CheckpointId, ProjectId};
 
 const DEFAULT_TERMINAL_WIDTH: usize = 100;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -89,47 +89,47 @@ fn main() {
         .author("Lukas Orsvärn")
         .subcommand(
             SubCommand::with_name("add")
-                .about("Adds a new time tracking event")
+                .about("Adds a new time tracking checkpoint")
                 .arg(
                     Arg::with_name("message")
-                        .help("A description for the event")
+                        .help("A message for the checkpoint")
                         .takes_value(true),
                 )
                 .arg(
                     Arg::with_name("project")
-                        .help("The project to associate with the event")
+                        .help("The project to associate with the checkpoint")
                         .takes_value(true),
                 )
                 .arg(
                     Arg::with_name("time")
                         .long("time")
                         .short("t")
-                        .help("The time and/or day to put the event at, the format is hh:mm or 'YYYY-MM-DD hh:mm'")
+                        .help("The time and/or day to put the checkpoint at, the format is hh:mm or 'YYYY-MM-DD hh:mm'")
                         .takes_value(true),
                 ),
         )
         .subcommand(
             SubCommand::with_name("print")
-                .about("Prints all information about the event at the given position")
+                .about("Prints all information about the checkpoint at the given position")
                 .arg(
                     Arg::with_name("position")
-                        .help("The position of the event to print")
+                        .help("The position of the checkpoint to print")
                         .takes_value(true)
                         .required(true),
                 ),
         )
         .subcommand(
             SubCommand::with_name("rm")
-                .about("Removes an event based on its position")
+                .about("Removes an checkpoint based on its position")
                 .arg(
                     Arg::with_name("position")
-                        .help("The position of the event to remove")
+                        .help("The position of the checkpoint to remove")
                         .takes_value(true),
                 ),
         )
         .subcommand(
             SubCommand::with_name("log")
-                .about("Lists events on a given day")
+                .about("Lists checkpoints on a given day")
                 .arg(
                     Arg::with_name("range")
                         .help("How many days into the past to list")
@@ -158,7 +158,7 @@ fn main() {
                 )
                 .arg(
                     Arg::with_name("filter")
-                        .help("Only log events in the given projects")
+                        .help("Only log checkpoints in the given projects")
                         .short("f")
                         .long("filter")
                         .takes_value(true),
@@ -172,42 +172,42 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("edit")
-                .about("Make changes to an event")
+                .about("Make changes to an checkpoint")
                 .arg(
                     Arg::with_name("position")
-                        .help("The position in the list of the event to edit (use log to find position)")
+                        .help("The position in the list of the checkpoint to edit (use log to find position)")
                         .takes_value(true),
                 )
                 .arg(
                     Arg::with_name("time")
                         .long("time")
                         .short("t")
-                        .help("The new time and/or day for the event, the format is hh:mm or 'YYYY-MM-DD hh:mm'")
+                        .help("The new time and/or day for the checkpoint, the format is hh:mm or 'YYYY-MM-DD hh:mm'")
                         .takes_value(true),
                 )
                 .arg(
                     Arg::with_name("message")
                         .short("m")
                         .long("message")
-                        .help("What the event's describing message should be changed to")
+                        .help("What the checkpoint's describing message should be changed to")
                         .takes_value(true),
                 )
                 .arg(
                     Arg::with_name("no-message")
                         .long("no-message")
-                        .help("Removes the message for the event")
+                        .help("Removes the message for the checkpoint")
                         .takes_value(false),
                 )
                 .arg(
                     Arg::with_name("project")
                         .long("project")
-                        .help("Change the event's project")
+                        .help("Change the checkpoint's project")
                         .takes_value(true),
                 )
                 .arg(
                     Arg::with_name("no-project")
                         .long("no-project")
-                        .help("Remove the project from the event")
+                        .help("Remove the project from the checkpoint")
                         .takes_value(false),
                 ),
         )
@@ -262,19 +262,19 @@ fn main() {
     let cfg = Config::read().expect("Could not read config file");
 
     if let Some(matches) = matches.subcommand_matches("add") {
-        add_event(matches, &cfg).expect("Failed adding event");
+        add_checkpoint(matches, &cfg).expect("Failed adding checkpoint");
     }
     if let Some(matches) = matches.subcommand_matches("rm") {
-        remove_event(matches, &cfg).unwrap();
+        remove_checkpoint(matches, &cfg).unwrap();
     }
     if let Some(matches) = matches.subcommand_matches("print") {
-        print_event(matches, &cfg).unwrap();
+        print_checkpoint(matches, &cfg).unwrap();
     }
     if let Some(matches) = matches.subcommand_matches("log") {
         log(matches, &cfg).unwrap();
     }
     if let Some(matches) = matches.subcommand_matches("edit") {
-        edit_event(matches, &cfg).unwrap();
+        edit_checkpoint(matches, &cfg).unwrap();
     }
     if let Some(_matches) = matches.subcommand_matches("projects") {
         list_projects(&cfg).unwrap();
@@ -290,7 +290,7 @@ fn main() {
     }
 }
 
-fn add_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
+fn add_checkpoint(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let timestamp = match matches.value_of("time") {
         Some(t) => match parse_datetime(t, Local::today(), Local::now().time()) {
             Ok(dt) => dt.timestamp(),
@@ -302,68 +302,70 @@ fn add_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         None => Utc::now().timestamp(),
     };
 
-    let description = matches.value_of("message").unwrap_or("");
-    let tag = matches.value_of("project").unwrap_or("");
+    let message = matches.value_of("message").unwrap_or("");
+    let project = matches.value_of("project").unwrap_or("");
 
     let path = Path::new(&config.database_path);
-    let mut event_db = time_track::EventDb::read(path)?;
+    let mut checkpoint_db = time_track::CheckpointDb::read(path)?;
 
-    if let Some(tag_id) = event_db.tag_id_from_short_name(tag) {
-        event_db.add_event(timestamp, description, tag_id).unwrap();
-        event_db.write(path)?;
+    if let Some(project_id) = checkpoint_db.project_id_from_short_name(project) {
+        checkpoint_db
+            .add_checkpoint(timestamp, message, project_id)
+            .unwrap();
+        checkpoint_db.write(path)?;
     } else {
         print!(
-            "Failed to add event, project with short name does not exist: '{}'",
-            tag
+            "Failed to add checkpoint, project with short name does not exist: '{}'",
+            project
         );
         return Ok(());
     }
 
     let duration_str = hour_string_from_i64(
-        event_db
-            .get_event_duration(&EventId::Timestamp(timestamp))
+        checkpoint_db
+            .get_checkpoint_duration(&CheckpointId::Timestamp(timestamp))
             .unwrap_or(0),
     );
 
     let format_str = format!("{} {}", YMD_FORMAT, HM_FORMAT);
     let time_str = Local.timestamp(timestamp, 0).format(&format_str);
     println!(
-        "Added event: {} ({}h): {} {:?}",
-        time_str, duration_str, description, &tag
+        "Added checkpoint: {} ({}h): {} {:?}",
+        time_str, duration_str, message, &project
     );
 
     Ok(())
 }
 
-fn remove_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
+fn remove_checkpoint(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
-    let mut event_db = time_track::EventDb::read(path)?;
+    let mut checkpoint_db = time_track::CheckpointDb::read(path)?;
 
-    let event_id = match matches.value_of("position") {
+    let checkpoint_id = match matches.value_of("position") {
         Some(position) => match position.parse::<usize>() {
-            Ok(p) => EventId::Position(p),
+            Ok(p) => CheckpointId::Position(p),
             _ => {
                 println!("Could not parse position value");
                 return Ok(());
             }
         },
-        None => EventId::Position(0),
+        None => CheckpointId::Position(0),
     };
 
-    match event_db.remove_event(&event_id) {
+    match checkpoint_db.remove_checkpoint(&checkpoint_id) {
         Some(e) => {
-            event_db.write(path)?;
+            checkpoint_db.write(path)?;
             println!("Removed {:?}", e);
         }
-        None => println!("Could not find an event at the given position"),
+        None => println!("Could not find an checkpoint at the given position"),
     };
 
     Ok(())
 }
 
-fn print_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
+fn print_checkpoint(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
-    let event_db = time_track::EventDb::read(path)?;
+    let checkpoint_db = time_track::CheckpointDb::read(path)?;
 
     let position = match matches.value_of("position") {
         Some(p) => match p.parse::<usize>() {
@@ -379,31 +381,33 @@ fn print_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         }
     };
 
-    let log_event = match event_db.get_log(&EventId::Position(position)) {
+    let log_checkpoint = match checkpoint_db.get_log(&CheckpointId::Position(position)) {
         Some(e) => e,
         None => {
-            println!("Could not find an event at the given position");
+            println!("Could not find an checkpoint at the given position");
             return Ok(());
         }
     };
 
-    let time = Local.timestamp(log_event.timestamp, 0).to_rfc2822();
+    let time = Local.timestamp(log_checkpoint.timestamp, 0).to_rfc2822();
 
-    let tag = if let Some(tag) = event_db.tag_from_tag_id(log_event.event.tag_id) {
-        tag.long_name.clone()
+    let project = if let Some(project) =
+        checkpoint_db.project_from_project_id(log_checkpoint.checkpoint.project_id)
+    {
+        project.long_name.clone()
     } else {
         "".to_string()
     };
 
-    // let tag = log_event
-    //     .event
-    //     .tag_id
+    // let project = log_checkpoint
+    //     .checkpoint
+    //     .project_id
     //     .iter()
-    //     .map(|i| &*event_db.tags[i].short_name)
+    //     .map(|i| &*checkpoint_db.projects[i].short_name)
     //     .collect::<Vec<&str>>()
     //     .join(", ");
 
-    let duration = match log_event.duration {
+    let duration = match log_checkpoint.duration {
         Some(d) => hour_string_from_i64(d),
         None => "-".to_string(),
     };
@@ -414,8 +418,8 @@ fn print_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
     print_key_value("Time", &time);
     print_key_value("Duration", &duration);
-    print_key_value("Message", &log_event.event.description);
-    print_key_value("Project", &tag);
+    print_key_value("Message", &log_checkpoint.checkpoint.message);
+    print_key_value("Project", &project);
     print_key_value("Position", &position.to_string());
 
     Ok(())
@@ -425,10 +429,10 @@ fn hour_string_from_i64(x: i64) -> String {
     format!("{:.1}", x as f32 / 60. / 60.)
 }
 
-/// Prints out events from the database in different ways.
+/// Prints out checkpoints from the database in different ways.
 fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
-    let event_db = time_track::EventDb::read(path)?;
+    let checkpoint_db = time_track::CheckpointDb::read(path)?;
 
     if (matches.is_present("range") || matches.is_present("back"))
         && (matches.is_present("start") || matches.is_present("end"))
@@ -497,23 +501,23 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     // Can the `start.format` and `end.format` calls here be de-duplicated?
     match verbosity {
         1 => println!(
-            "Printing total stats for events between {} and {}",
+            "Printing total stats for checkpoints between {} and {}",
             start.format(YMDHM_FORMAT),
             end.format(YMDHM_FORMAT)
         ),
         2 => println!(
-            "Printing daily stats for events between {} and {}",
+            "Printing daily stats for checkpoints between {} and {}",
             start.format(YMDHM_FORMAT),
             end.format(YMDHM_FORMAT)
         ),
         _ => println!(
-            "Printing events between {} and {}",
+            "Printing checkpoints between {} and {}",
             start.format(YMDHM_FORMAT),
             end.format(YMDHM_FORMAT)
         ),
     }
 
-    fn print_table(pos: &str, duration: &str, time: &str, tags: &str, description: &str) {
+    fn print_table(pos: &str, duration: &str, time: &str, projects: &str, message: &str) {
         let terminal_width: usize = match terminal_size() {
             Some((Width(w), Height(_))) => w.into(),
             None => DEFAULT_TERMINAL_WIDTH,
@@ -521,18 +525,13 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
         let head = format!(
             "{:<6.6}|{:<5.5}|{:<6.6}|{:<16.16}|",
-            pos, duration, time, tags
+            pos, duration, time, projects
         );
 
         let tail_length: usize =
             max(terminal_width as i16 - head.chars().count() as i16 - 1, 4) as usize;
 
-        let output = format!(
-            "{}{:<width$.width$}",
-            head,
-            description,
-            width = tail_length
-        );
+        let output = format!("{}{:<width$.width$}", head, message, width = tail_length);
 
         println!("{}", output.trim());
     }
@@ -541,21 +540,21 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         println!("Duration: {}", hour_string_from_i64(d));
     }
 
-    let filter_tags = matches.value_of("filter").unwrap_or("");
-    let filter_tags: Vec<_> = filter_tags.split_whitespace().collect();
-    let filter_tag_ids: Vec<TagId> = filter_tags
+    let filter_projects = matches.value_of("filter").unwrap_or("");
+    let filter_projects: Vec<_> = filter_projects.split_whitespace().collect();
+    let filter_project_ids: Vec<ProjectId> = filter_projects
         .iter()
         .map(|ft| {
-            event_db
-                .tag_id_from_short_name(ft)
+            checkpoint_db
+                .project_id_from_short_name(ft)
                 .expect("Unable to find project(s) with the given short name(s)")
         })
         .collect();
 
-    if !filter_tag_ids.is_empty() {
-        print!("Only including events with the following projects:");
-        for tag in filter_tags {
-            print!(" {}", tag);
+    if !filter_project_ids.is_empty() {
+        print!("Only including checkpoints with the following projects:");
+        for project in filter_projects {
+            print!(" {}", project);
         }
         println!();
     }
@@ -566,20 +565,20 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         print_table("Pos", "Dur", "Time", "Project", "Message");
     }
 
-    let log_events = event_db.get_log_between_times(&start, &end);
-    let log_events = log_events.iter().filter(|filter_event| {
-        filter_tag_ids
+    let log_checkpoints = checkpoint_db.get_log_between_times(&start, &end);
+    let log_checkpoints = log_checkpoints.iter().filter(|filter_checkpoint| {
+        filter_project_ids
             .iter()
-            .all(|filter_tag_id| filter_event.event.tag_id == *filter_tag_id)
+            .all(|filter_project_id| filter_checkpoint.checkpoint.project_id == *filter_project_id)
     });
 
     let mut total_duration = 0i64;
     let mut daily_duration = 0i64;
 
-    for log_event in log_events {
-        let event_date = Local.timestamp(log_event.timestamp, 0).date();
+    for log_checkpoint in log_checkpoints {
+        let checkpoint_date = Local.timestamp(log_checkpoint.timestamp, 0).date();
 
-        if current_date.is_none() || event_date != current_date.unwrap() {
+        if current_date.is_none() || checkpoint_date != current_date.unwrap() {
             if current_date.is_some() {
                 if verbosity >= 2 {
                     print_duration_today(daily_duration);
@@ -588,14 +587,14 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             }
 
             if verbosity >= 2 {
-                println!("\n{}", event_date.format("%Y-%m-%d %a"));
+                println!("\n{}", checkpoint_date.format("%Y-%m-%d %a"));
             }
-            current_date = Some(event_date);
+            current_date = Some(checkpoint_date);
         }
 
-        let duration_string = match log_event.duration {
+        let duration_string = match log_checkpoint.duration {
             Some(d) => {
-                if log_event.event.tag_id == TagId::NoId {
+                if log_checkpoint.checkpoint.project_id == ProjectId::NoId {
                     "".to_string()
                 } else {
                     total_duration += d;
@@ -607,30 +606,32 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         };
 
         let time_string = Local
-            .timestamp(log_event.timestamp, 0)
+            .timestamp(log_checkpoint.timestamp, 0)
             .format("%H:%M")
             .to_string();
 
-        // let tag_string: String = log_event
-        //     .event
-        //     .tag_id
-        //     .map(|i| &*event_db.tags[i].short_name)
+        // let project_string: String = log_checkpoint
+        //     .checkpoint
+        //     .project_id
+        //     .map(|i| &*checkpoint_db.projects[i].short_name)
         //     .collect::<Vec<&str>>()
         //     .join(" ");
 
-        let tag_string = if let Some(tag) = event_db.tag_from_tag_id(log_event.event.tag_id) {
-            tag.long_name.clone()
+        let project_string = if let Some(project) =
+            checkpoint_db.project_from_project_id(log_checkpoint.checkpoint.project_id)
+        {
+            project.long_name.clone()
         } else {
             "".to_string()
         };
 
         if verbosity >= 3 {
             print_table(
-                &log_event.position.to_string(),
+                &log_checkpoint.position.to_string(),
                 &duration_string,
                 &time_string,
-                &tag_string,
-                &log_event.event.description,
+                &project_string,
+                &log_checkpoint.checkpoint.message,
             );
         }
     }
@@ -681,36 +682,46 @@ fn parse_datetime(
     }
 }
 
-fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
+fn edit_checkpoint(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
-    let mut event_db = time_track::EventDb::read(path)?;
+    let mut checkpoint_db = time_track::CheckpointDb::read(path)?;
 
-    let event_id = match matches.value_of("position") {
+    let checkpoint_id = match matches.value_of("position") {
         Some(position) => match position.parse::<usize>() {
-            Ok(p) => EventId::Position(p),
+            Ok(p) => CheckpointId::Position(p),
             _ => {
                 println!("Could not parse position value");
                 return Ok(());
             }
         },
-        None => EventId::Position(0),
+        None => CheckpointId::Position(0),
     };
 
-    // By checking if the event_id exists in the databse here we can safely use `unwrap()`
+    // By checking if the checkpoint_id exists in the databse here we can safely use `unwrap()`
     // in the rest of the code with little risk of triggering a panic.
-    if !event_id.exists(&event_db) {
-        println!("Couldn't find an event at the given position");
+    if !checkpoint_id.exists(&checkpoint_db) {
+        println!("Couldn't find an checkpoint at the given position");
         return Ok(());
     }
 
-    let original_event = event_db.get_event(&event_id).unwrap().clone();
+    let original_checkpoint = checkpoint_db
+        .get_checkpoint(&checkpoint_id)
+        .unwrap()
+        .clone();
 
     if let Some(date_time_str) = matches.value_of("time") {
-        let event_time = Local.timestamp(event_id.to_timestamp(&event_db).unwrap(), 0);
-        let date_time =
-            parse_datetime(date_time_str, event_time.date(), event_time.time()).unwrap();
-        let event = event_db.remove_event(&event_id).unwrap();
-        event_db.events.insert(date_time.timestamp(), event);
+        let checkpoint_time =
+            Local.timestamp(checkpoint_id.to_timestamp(&checkpoint_db).unwrap(), 0);
+        let date_time = parse_datetime(
+            date_time_str,
+            checkpoint_time.date(),
+            checkpoint_time.time(),
+        )
+        .unwrap();
+        let checkpoint = checkpoint_db.remove_checkpoint(&checkpoint_id).unwrap();
+        checkpoint_db
+            .checkpoints
+            .insert(date_time.timestamp(), checkpoint);
     }
 
     // Message
@@ -721,11 +732,17 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     }
 
     if let Some(message) = matches.value_of("message") {
-        event_db.get_event_mut(&event_id).unwrap().description = message.to_string();
+        checkpoint_db
+            .get_checkpoint_mut(&checkpoint_id)
+            .unwrap()
+            .message = message.to_string();
     }
 
     if no_message {
-        event_db.get_event_mut(&event_id).unwrap().description = String::new();
+        checkpoint_db
+            .get_checkpoint_mut(&checkpoint_id)
+            .unwrap()
+            .message = String::new();
     }
 
     // Project
@@ -735,39 +752,46 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         return Ok(());
     }
 
-    if let Some(tag) = matches.value_of("project") {
-        if let Some(tag_id) = event_db.tag_id_from_short_name(tag) {
-            if event_db.set_event_tag(event_id, tag_id).is_err() {
-                println!("Couldn't set the event project");
+    if let Some(project) = matches.value_of("project") {
+        if let Some(project_id) = checkpoint_db.project_id_from_short_name(project) {
+            if checkpoint_db
+                .set_checkpoint_project(checkpoint_id, project_id)
+                .is_err()
+            {
+                println!("Couldn't set the checkpoint project");
                 return Ok(());
             }
         } else {
-            println!("Invalid tag short name: [{}]", tag);
+            println!("Invalid project short name: [{}]", project);
             return Ok(());
         }
     }
 
-    if no_project && event_db.set_event_tag(event_id, TagId::NoId).is_err() {
-        println!("Couldn't remove the event project");
+    if no_project
+        && checkpoint_db
+            .set_checkpoint_project(checkpoint_id, ProjectId::NoId)
+            .is_err()
+    {
+        println!("Couldn't remove the checkpoint project");
         return Ok(());
     }
 
-    let edited_event = event_db.get_event(&event_id);
+    let edited_checkpoint = checkpoint_db.get_checkpoint(&checkpoint_id);
 
-    event_db.write(path)?;
-    println!("Sucessfully edited the event");
-    println!("Original: {:?}", original_event);
-    println!("  Edited: {:?}", edited_event);
+    checkpoint_db.write(path)?;
+    println!("Sucessfully edited the checkpoint");
+    println!("Original: {:?}", original_checkpoint);
+    println!("  Edited: {:?}", edited_checkpoint);
     Ok(())
 }
 
 fn list_projects(config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
-    let event_db = time_track::EventDb::read(path)?;
+    let checkpoint_db = time_track::CheckpointDb::read(path)?;
 
     println!("Projects:");
-    for (id, tag) in event_db.tags.iter() {
-        println!("{}: {} - {}", id, tag.short_name, tag.long_name);
+    for (id, project) in checkpoint_db.projects.iter() {
+        println!("{}: {} - {}", id, project.short_name, project.long_name);
     }
 
     Ok(())
@@ -775,13 +799,13 @@ fn list_projects(config: &Config) -> io::Result<()> {
 
 fn add_project(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
-    let mut event_db = time_track::EventDb::read(path)?;
+    let mut checkpoint_db = time_track::CheckpointDb::read(path)?;
 
     // I can unwrap these because these arguments are required in Clap.
     let long_name = matches.value_of("long").unwrap();
     let short_name = matches.value_of("short").unwrap();
 
-    let id = match event_db.add_tag(long_name, short_name) {
+    let id = match checkpoint_db.add_project(long_name, short_name) {
         Ok(id) => id,
         Err(e) => {
             println!(
@@ -793,7 +817,7 @@ fn add_project(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         }
     };
 
-    event_db.write(path)?;
+    checkpoint_db.write(path)?;
 
     println!(
         "Added project '{long}' (ID: '{id}', short name: '{short}')",
@@ -807,12 +831,12 @@ fn add_project(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
 fn remove_project(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
-    let mut event_db = time_track::EventDb::read(path)?;
+    let mut checkpoint_db = time_track::CheckpointDb::read(path)?;
 
     if let Some(short_name) = matches.value_of("short") {
-        if let Some(tag_id) = event_db.tag_id_from_short_name(short_name) {
-            event_db.remove_tag(tag_id).unwrap();
-            event_db.write(path)?;
+        if let Some(project_id) = checkpoint_db.project_id_from_short_name(short_name) {
+            checkpoint_db.remove_project(project_id).unwrap();
+            checkpoint_db.write(path)?;
         } else {
             println!("Project with short name does not exist: '{}'", short_name);
         }
