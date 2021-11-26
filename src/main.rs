@@ -303,18 +303,18 @@ fn add_checkpoint(matches: &clap::ArgMatches, config: &Config) -> io::Result<()>
     };
 
     let message = matches.value_of("message").unwrap_or("");
-    let project = matches.value_of("project").unwrap_or("");
+    let short_name = matches.value_of("project").unwrap_or("");
     let mut long_name = String::new();
     let mut no_id = false;
 
     let path = Path::new(&config.database_path);
     let mut checkpoint_db = time_track::CheckpointDb::read(path)?;
 
-    if let Some(project_id) = checkpoint_db.project_id_from_short_name(project) {
-        if let ProjectId::NoId = project_id {
-            no_id = true;
-        } else if let Some(project) = checkpoint_db.project_from_project_id(project_id) {
+    if let Some(project_id) = checkpoint_db.project_id_from_short_name(short_name) {
+        if let Some(project) = checkpoint_db.project_from_project_id(project_id) {
             long_name = project.long_name.clone();
+        } else if let ProjectId::NoId = project_id {
+            no_id = true;
         }
 
         checkpoint_db
@@ -322,9 +322,9 @@ fn add_checkpoint(matches: &clap::ArgMatches, config: &Config) -> io::Result<()>
             .unwrap();
         checkpoint_db.write(path)?;
     } else {
-        print!(
+        println!(
             "Failed to add checkpoint, project with short name does not exist: '{}'",
-            project
+            short_name
         );
         return Ok(());
     }
