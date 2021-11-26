@@ -187,8 +187,8 @@ fn main() {
                 )
                 .arg(
                     Arg::with_name("message")
-                        .short("m")
                         .long("message")
+                        .short("m")
                         .help("What the checkpoint's describing message should be changed to")
                         .takes_value(true),
                 )
@@ -201,6 +201,7 @@ fn main() {
                 .arg(
                     Arg::with_name("project")
                         .long("project")
+                        .short("p")
                         .help("Change the checkpoint's project")
                         .takes_value(true),
                 )
@@ -425,14 +426,6 @@ fn print_checkpoint(matches: &clap::ArgMatches, config: &Config) -> io::Result<(
         "".to_string()
     };
 
-    // let project = log_checkpoint
-    //     .checkpoint
-    //     .project_id
-    //     .iter()
-    //     .map(|i| &*checkpoint_db.projects[i].short_name)
-    //     .collect::<Vec<&str>>()
-    //     .join(", ");
-
     let duration = match log_checkpoint.duration {
         Some(d) => hour_string_from_i64(d),
         None => "-".to_string(),
@@ -636,13 +629,6 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             .format("%H:%M")
             .to_string();
 
-        // let project_string: String = log_checkpoint
-        //     .checkpoint
-        //     .project_id
-        //     .map(|i| &*checkpoint_db.projects[i].short_name)
-        //     .collect::<Vec<&str>>()
-        //     .join(" ");
-
         let project_string = if let Some(project) =
             checkpoint_db.project_from_project_id(log_checkpoint.checkpoint.project_id)
         {
@@ -788,7 +774,7 @@ fn edit_checkpoint(matches: &clap::ArgMatches, config: &Config) -> io::Result<()
                 return Ok(());
             }
         } else {
-            println!("Invalid project short name: [{}]", project);
+            println!("Invalid project short name: '{}'", project);
             return Ok(());
         }
     }
@@ -827,7 +813,7 @@ fn add_project(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
     let mut checkpoint_db = time_track::CheckpointDb::read(path)?;
 
-    // I can unwrap these because these arguments are required in Clap.
+    // I can unwrap these because they are required in Clap.
     let long_name = matches.value_of("long").unwrap();
     let short_name = matches.value_of("short").unwrap();
 
