@@ -12,7 +12,7 @@ use std::{
     path::Path,
 };
 use terminal_size::{terminal_size, Height, Width};
-use time_track::EventId;
+use time_track::{EventId, TagId};
 
 const DEFAULT_TERMINAL_WIDTH: usize = 100;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -96,8 +96,8 @@ fn main() {
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("tags")
-                        .help("The tags to associate with the event")
+                    Arg::with_name("project")
+                        .help("The project to associate with the event")
                         .takes_value(true),
                 )
                 .arg(
@@ -158,7 +158,7 @@ fn main() {
                 )
                 .arg(
                     Arg::with_name("filter")
-                        .help("Only log events with the given tags")
+                        .help("Only log events in the given projects")
                         .short("f")
                         .long("filter")
                         .takes_value(true),
@@ -199,32 +199,30 @@ fn main() {
                         .takes_value(false),
                 )
                 .arg(
-                    Arg::with_name("add-tags")
-                        .long("add-tags")
-                        .short("a")
-                        .help("Tags that should be added to the event")
+                    Arg::with_name("project")
+                        .long("project")
+                        .help("Change the event's project")
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("rm-tags")
-                        .long("rm-tags")
-                        .short("r")
-                        .help("Tags that should be removed from the event")
-                        .takes_value(true),
+                    Arg::with_name("no-project")
+                        .long("no-project")
+                        .help("Remove the project from the event")
+                        .takes_value(false),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("tags")
-                .about("Lists all available tags")
+            SubCommand::with_name("projects")
+                .about("Lists all available projects")
         )
         .subcommand(
-            SubCommand::with_name("add-tag")
-                .about("Adds a tag to the database")
+            SubCommand::with_name("add-project")
+                .about("Adds a project to the database")
                 .arg(
                     Arg::with_name("short")
                         .short("s")
                         .long("short")
-                        .help("The short name for the tag that can be quickly written in the terminal")
+                        .help("The short name for the project that can be quickly written in the terminal")
                         .takes_value(true)
                         .required(true),
                 )
@@ -232,19 +230,17 @@ fn main() {
                     Arg::with_name("long")
                         .short("l")
                         .long("long")
-                        .help("The long name for the tag that for clear printing")
+                        .help("The long name for the project for pretty printing")
                         .takes_value(true)
                         .required(true),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("rm-tag")
-                .about("Removes a tag from the database")
+            SubCommand::with_name("rm-project")
+                .about("Removes a project from the database")
                 .arg(
                     Arg::with_name("short")
-                        .short("s")
-                        .long("short")
-                        .help("The short name of the tag to remove")
+                        .help("The short name of the project to remove")
                         .takes_value(true)
                         .required(true),
                 ),
@@ -280,14 +276,14 @@ fn main() {
     if let Some(matches) = matches.subcommand_matches("edit") {
         edit_event(matches, &cfg).unwrap();
     }
-    if let Some(_matches) = matches.subcommand_matches("tags") {
-        list_tags(&cfg).unwrap();
+    if let Some(_matches) = matches.subcommand_matches("projects") {
+        list_projects(&cfg).unwrap();
     }
-    if let Some(matches) = matches.subcommand_matches("add-tag") {
-        add_tag(matches, &cfg).unwrap();
+    if let Some(matches) = matches.subcommand_matches("add-project") {
+        add_project(matches, &cfg).unwrap();
     }
-    if let Some(matches) = matches.subcommand_matches("rm-tag") {
-        remove_tag(matches, &cfg).unwrap();
+    if let Some(matches) = matches.subcommand_matches("rm-project") {
+        remove_project(matches, &cfg).unwrap();
     }
     if let Some(matches) = matches.subcommand_matches("config") {
         config(matches, &cfg).unwrap();
@@ -307,13 +303,21 @@ fn add_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     };
 
     let description = matches.value_of("message").unwrap_or("");
-    let tags = matches.value_of("tags").unwrap_or("");
-    let tags: Vec<_> = tags.split_whitespace().collect();
+    let tag = matches.value_of("project").unwrap_or("");
 
     let path = Path::new(&config.database_path);
     let mut event_db = time_track::EventDb::read(path)?;
-    event_db.add_event(timestamp, description, &tags).unwrap();
-    event_db.write(path)?;
+
+    if let Some(tag_id) = event_db.tag_id_from_short_name(tag) {
+        event_db.add_event(timestamp, description, tag_id).unwrap();
+        event_db.write(path)?;
+    } else {
+        print!(
+            "Failed to add event, project with short name does not exist: '{}'",
+            tag
+        );
+        return Ok(());
+    }
 
     let duration_str = hour_string_from_i64(
         event_db
@@ -325,7 +329,7 @@ fn add_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let time_str = Local.timestamp(timestamp, 0).format(&format_str);
     println!(
         "Added event: {} ({}h): {} {:?}",
-        time_str, duration_str, description, &tags
+        time_str, duration_str, description, &tag
     );
 
     Ok(())
@@ -348,7 +352,7 @@ fn remove_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
     match event_db.remove_event(&event_id) {
         Some(e) => {
-            event_db.write(&path)?;
+            event_db.write(path)?;
             println!("Removed {:?}", e);
         }
         None => println!("Could not find an event at the given position"),
@@ -385,13 +389,19 @@ fn print_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
     let time = Local.timestamp(log_event.timestamp, 0).to_rfc2822();
 
-    let tags = log_event
-        .event
-        .tag_ids
-        .iter()
-        .map(|i| &*event_db.tags[i].short_name)
-        .collect::<Vec<&str>>()
-        .join(", ");
+    let tag = if let Some(tag) = event_db.tag_from_tag_id(log_event.event.tag_id) {
+        tag.long_name.clone()
+    } else {
+        "".to_string()
+    };
+
+    // let tag = log_event
+    //     .event
+    //     .tag_id
+    //     .iter()
+    //     .map(|i| &*event_db.tags[i].short_name)
+    //     .collect::<Vec<&str>>()
+    //     .join(", ");
 
     let duration = match log_event.duration {
         Some(d) => hour_string_from_i64(d),
@@ -404,8 +414,8 @@ fn print_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
     print_key_value("Time", &time);
     print_key_value("Duration", &duration);
-    print_key_value("Description", &log_event.event.description);
-    print_key_value("Tags", &tags);
+    print_key_value("Message", &log_event.event.description);
+    print_key_value("Project", &tag);
     print_key_value("Position", &position.to_string());
 
     Ok(())
@@ -533,17 +543,17 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
     let filter_tags = matches.value_of("filter").unwrap_or("");
     let filter_tags: Vec<_> = filter_tags.split_whitespace().collect();
-    let filter_tag_ids: Vec<u16> = filter_tags
+    let filter_tag_ids: Vec<TagId> = filter_tags
         .iter()
         .map(|ft| {
             event_db
                 .tag_id_from_short_name(ft)
-                .expect("Unable to find tag(s) with the given short name(s)")
+                .expect("Unable to find project(s) with the given short name(s)")
         })
         .collect();
 
     if !filter_tag_ids.is_empty() {
-        print!("Only including events with the following tags:");
+        print!("Only including events with the following projects:");
         for tag in filter_tags {
             print!(" {}", tag);
         }
@@ -553,18 +563,14 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let mut current_date: Option<Date<Local>> = None;
 
     if verbosity >= 3 {
-        print_table("Pos", "Dur", "Time", "Tags", "Description");
+        print_table("Pos", "Dur", "Time", "Project", "Message");
     }
 
     let log_events = event_db.get_log_between_times(&start, &end);
     let log_events = log_events.iter().filter(|filter_event| {
-        filter_tag_ids.iter().all(|filter_tag_id| {
-            filter_event
-                .event
-                .tag_ids
-                .iter()
-                .any(|tag_id| tag_id == filter_tag_id)
-        })
+        filter_tag_ids
+            .iter()
+            .all(|filter_tag_id| filter_event.event.tag_id == *filter_tag_id)
     });
 
     let mut total_duration = 0i64;
@@ -589,7 +595,7 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
 
         let duration_string = match log_event.duration {
             Some(d) => {
-                if log_event.event.tag_ids.is_empty() {
+                if log_event.event.tag_id == TagId::NoId {
                     "".to_string()
                 } else {
                     total_duration += d;
@@ -605,13 +611,18 @@ fn log(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
             .format("%H:%M")
             .to_string();
 
-        let tag_string: String = log_event
-            .event
-            .tag_ids
-            .iter()
-            .map(|i| &*event_db.tags[i].short_name)
-            .collect::<Vec<&str>>()
-            .join(" ");
+        // let tag_string: String = log_event
+        //     .event
+        //     .tag_id
+        //     .map(|i| &*event_db.tags[i].short_name)
+        //     .collect::<Vec<&str>>()
+        //     .join(" ");
+
+        let tag_string = if let Some(tag) = event_db.tag_from_tag_id(log_event.event.tag_id) {
+            tag.long_name.clone()
+        } else {
+            "".to_string()
+        };
 
         if verbosity >= 3 {
             print_table(
@@ -662,7 +673,7 @@ fn parse_datetime(
                 Local.from_local_datetime(&naive_date_time).unwrap()
             }
 
-            _ => match Local.datetime_from_str(&dt_str, YMDHM_FORMAT) {
+            _ => match Local.datetime_from_str(dt_str, YMDHM_FORMAT) {
                 Ok(r) => r,
                 Err(e) => return Err(e),
             },
@@ -702,14 +713,14 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         event_db.events.insert(date_time.timestamp(), event);
     }
 
+    // Message
     let no_message = matches.is_present("no-message");
+    if matches.is_present("message") && no_message {
+        println!("Can't use both `message` and `no-message` flags");
+        return Ok(());
+    }
 
     if let Some(message) = matches.value_of("message") {
-        if no_message {
-            println!("Can't use both the 'message' and 'no-message' attributes at the same time");
-            return Ok(());
-        }
-
         event_db.get_event_mut(&event_id).unwrap().description = message.to_string();
     }
 
@@ -717,28 +728,28 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
         event_db.get_event_mut(&event_id).unwrap().description = String::new();
     }
 
-    if let Some(add_tags) = matches.value_of("add-tags") {
-        let short_names: Vec<&str> = add_tags.split_whitespace().collect();
+    // Project
+    let no_project = matches.is_present("no_project");
+    if matches.is_present("project") && no_project {
+        println!("Can't use both `project` and `no-project` flags");
+        return Ok(());
+    }
 
-        match event_db.add_tags_for_event(&event_id, &short_names) {
-            Ok(_) => (),
-            Err(e) => {
-                println!("{}", e);
+    if let Some(tag) = matches.value_of("project") {
+        if let Some(tag_id) = event_db.tag_id_from_short_name(tag) {
+            if event_db.set_event_tag(event_id, tag_id).is_err() {
+                println!("Couldn't set the event project");
                 return Ok(());
             }
+        } else {
+            println!("Invalid tag short name: [{}]", tag);
+            return Ok(());
         }
     }
 
-    if let Some(rm_tags) = matches.value_of("rm-tags") {
-        let short_names: Vec<&str> = rm_tags.split_whitespace().collect();
-
-        match event_db.remove_tags_for_event(&event_id, &short_names) {
-            Ok(_) => (),
-            Err(e) => {
-                println!("{}", e);
-                return Ok(());
-            }
-        }
+    if no_project && event_db.set_event_tag(event_id, TagId::NoId).is_err() {
+        println!("Couldn't remove the event project");
+        return Ok(());
     }
 
     let edited_event = event_db.get_event(&event_id);
@@ -746,15 +757,15 @@ fn edit_event(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     event_db.write(path)?;
     println!("Sucessfully edited the event");
     println!("Original: {:?}", original_event);
-    println!("  Edited:   {:?}", edited_event);
+    println!("  Edited: {:?}", edited_event);
     Ok(())
 }
 
-fn list_tags(config: &Config) -> io::Result<()> {
+fn list_projects(config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
     let event_db = time_track::EventDb::read(path)?;
 
-    println!("Tags:");
+    println!("Projects:");
     for (id, tag) in event_db.tags.iter() {
         println!("{}: {} - {}", id, tag.short_name, tag.long_name);
     }
@@ -762,7 +773,7 @@ fn list_tags(config: &Config) -> io::Result<()> {
     Ok(())
 }
 
-fn add_tag(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
+fn add_project(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
     let mut event_db = time_track::EventDb::read(path)?;
 
@@ -770,19 +781,41 @@ fn add_tag(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let long_name = matches.value_of("long").unwrap();
     let short_name = matches.value_of("short").unwrap();
 
-    event_db.add_tag(long_name, short_name).unwrap();
+    let id = match event_db.add_tag(long_name, short_name) {
+        Ok(id) => id,
+        Err(e) => {
+            println!(
+                "Could not add project with short name '{short}': {error}",
+                short = short_name,
+                error = e,
+            );
+            return Ok(());
+        }
+    };
+
     event_db.write(path)?;
+
+    println!(
+        "Added project '{long}' (ID: '{id}', short name: '{short}')",
+        id = id,
+        short = short_name,
+        long = long_name,
+    );
 
     Ok(())
 }
 
-fn remove_tag(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
+fn remove_project(matches: &clap::ArgMatches, config: &Config) -> io::Result<()> {
     let path = Path::new(&config.database_path);
     let mut event_db = time_track::EventDb::read(path)?;
 
     if let Some(short_name) = matches.value_of("short") {
-        event_db.remove_tag(short_name).unwrap();
-        event_db.write(path)?;
+        if let Some(tag_id) = event_db.tag_id_from_short_name(short_name) {
+            event_db.remove_tag(tag_id).unwrap();
+            event_db.write(path)?;
+        } else {
+            println!("Project with short name does not exist: '{}'", short_name);
+        }
     }
 
     Ok(())

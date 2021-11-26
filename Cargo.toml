@@ -1,8 +1,8 @@
 [package]
 name = "time_track_cli"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Lukas Orsvärn <lukas@orsvarn.com>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 chrono = "0.4"
@@ -11,4 +11,5 @@ directories = "0.10"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 terminal_size = "0.1"
-time_track = { git = "https://github.com/lukors/time_track", tag = "v0.2.0" }
+# time_track = { git = "https://github.com/lukors/time_track", tag = "v0.2.0" }
+time_track = { path = "../time_track" }
